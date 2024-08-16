@@ -45,6 +45,7 @@ struct State<'a> {
     block_atlas: atlas_tex::AtlasTexture,
     mouse_pressed: bool,
     block_registry: block::BlockRegistry<'a>,
+    colormap_bind_group: wgpu::BindGroup,
 }
 
 impl<'a> State<'a> {
@@ -112,17 +113,22 @@ impl<'a> State<'a> {
 
 
         let mut block_registry = block::BlockRegistry::new();
-        let mut block_atlas = atlas_tex::AtlasTexture::new(&device, &queue, wgpu::TextureFormat::Rgba8UnormSrgb, (16, 16) );
-
-        let cir_bytes = include_bytes!("../res/test_block_circuit.png");
-        let cir_texture = texture::Texture::from_bytes(&device, &queue, cir_bytes, "../res/test_block_circuit.png").unwrap();
-        let _ = block_registry.add(&"Circuit", block_atlas.add_texture(&cir_texture, &device, &queue).unwrap() );
-        let blu_bytes = include_bytes!("../res/test_block_bluechunk.png");
-        let blu_texture = texture::Texture::from_bytes(&device, &queue, blu_bytes, "../res/test_block_bluechunk.png").unwrap();
-        let _ = block_registry.add(&"Blue Chunk", block_atlas.add_texture(&blu_texture, &device, &queue).unwrap() );
+        let mut block_atlas = atlas_tex::AtlasTexture::new(&device, &queue, wgpu::TextureFormat::R8Uint, (16, 16) );
 
         let pal_bytes = include_bytes!("../res/palette.png");
-        let test_texture = texture::Texture::from_image_palettize( &device, &queue, &image::load_from_memory(cir_bytes).unwrap(), &image::load_from_memory(pal_bytes).unwrap(), &texture::make_transcode_renderpipeline(&device, &queue), Some("Transcode test") );
+        let pal_img = image::load_from_memory(pal_bytes).unwrap();
+
+        let cir_bytes = include_bytes!("../res/test_block_circuit.png");
+        let cir_image = image::load_from_memory(cir_bytes).unwrap();
+        let cir_texture = texture::Texture::from_image_palettize(&device, &queue, &cir_image, &pal_img, Some("../res/test_block_circuit.png")).unwrap();
+
+        let _ = block_registry.add(&"Circuit", block_atlas.add_texture(&cir_texture, &device, &queue).unwrap() );
+
+        let blu_bytes = include_bytes!("../res/test_block_bluechunk.png");
+        let blu_image = image::load_from_memory(blu_bytes).unwrap();
+        let blu_texture = texture::Texture::from_image_palettize(&device, &queue, &blu_image, &pal_img, Some("../res/test_block_bluechunk.png")).unwrap();
+
+        let _ = block_registry.add(&"Blue Chunk", block_atlas.add_texture(&blu_texture, &device, &queue).unwrap() );
 
 
 
@@ -136,7 +142,7 @@ impl<'a> State<'a> {
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             view_dimension: wgpu::TextureViewDimension::D2Array,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            sample_type: wgpu::TextureSampleType::Uint,
                         },
                         count: None,
                     },
@@ -145,7 +151,7 @@ impl<'a> State<'a> {
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         // This should match the filterable field of the
                         // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                         count: None,
                     },
                 ],
@@ -168,6 +174,39 @@ impl<'a> State<'a> {
                 label: Some("diffuse_bind_group"),
             }
         );
+
+        let loadonly_texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                ],
+                label: Some("loadonly_texture_bind_group_layout"),
+            });
+
+        let colormap_bytes = include_bytes!("../res/colormap.png");
+        let colormap_tex = texture::Texture::from_bytes(&device, &queue, colormap_bytes, &"Colormap Texture").unwrap();
+        let colormap_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &loadonly_texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&colormap_tex.view),
+                    }
+                ],
+                label: Some("colormap_bind_group"),
+            }
+        );
+
 
         let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
@@ -221,8 +260,8 @@ impl<'a> State<'a> {
 
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            label: Some("Block Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("block_shader.wgsl").into()),
         });
 
         let render_pipeline_layout =
@@ -231,6 +270,7 @@ impl<'a> State<'a> {
             bind_group_layouts: &[
                 &camera_bind_group_layout,
                 &texture_bind_group_layout,
+                &loadonly_texture_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -271,8 +311,8 @@ impl<'a> State<'a> {
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: texture::Texture::DEPTH_FORMAT,
                 depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less, // 1.
-                stencil: wgpu::StencilState::default(), // 2.
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState {
@@ -323,6 +363,7 @@ impl<'a> State<'a> {
             block_atlas,
             block_registry,
             mouse_pressed: false,
+            colormap_bind_group,
         }
     }
 
@@ -440,6 +481,7 @@ impl<'a> State<'a> {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.colormap_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);

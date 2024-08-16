@@ -15,6 +15,7 @@ bytemuck = { version = "1.16", features = [ "derive" ] }
 ndarray = "0.16.0"
 cgmath = "0.18"
 anyhow = "1.0"
+num = "0.4.3"
 
 [dependencies.image]
 version = "0.24"
