@@ -5,14 +5,18 @@ use ndarray::{
 
 use crate::wctx::Vertex;
 
-use super::block::BlockRegistry;
+use super::block::{
+    BlockRegistry,
+    BlockShapeRegistry
+};
 
 const CHUNK_SIZE: usize = 16;
 
 #[derive(Copy, Clone)]
 pub struct BlockInstance {
     pub blockdef: u16,
-    pub exparam: u8
+    pub exparam: u8,
+    pub light: u8
 }
 
 pub struct Chunk {
@@ -24,7 +28,8 @@ impl Chunk {
     pub fn new() -> Chunk {
         let proto_bi = BlockInstance{
             blockdef: 1,
-            exparam: 0
+            exparam: 0,
+            light: 255,
         };
         let data = Array3::from_elem((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), proto_bi);
         let draw_cache = ChunkDrawCache{ vertices: Box::new( [Vertex{ position:[0.,0.,0.], uv: [0.,0.], array_index: 0, light: 1.0 }; 0] ), indices: Box::new( [1; 0] ) };
@@ -35,7 +40,7 @@ impl Chunk {
         }
     }
 
-    pub fn update_draw_cache(&mut self, registry: &BlockRegistry) {
+    pub fn update_draw_cache(&mut self, registry: &BlockRegistry, shape_registry: &BlockShapeRegistry) {
         let mut tverts = Vec::<Vertex>::new();
         let mut tinds = Vec::<u16>::new();
 
@@ -51,51 +56,7 @@ impl Chunk {
             }
 
             if let Some(bdef) = registry.get(bi.blockdef) {
-
-                // create sides for the blockinstance
-                // top
-                let up = (pos.0, pos.1 + 1, pos.2 );
-                if !( is_in_bounds(up) && self.data.get(up).unwrap().blockdef != 0 ) {
-                    make_quad_cubeface(&mut tverts, &mut tinds, pos, bdef, (0, 1, 0, 1, 0, 0, 0, 0, 1));
-                }
-                // bottom
-                if pos.1 > 0 {
-                    let down = (pos.0, pos.1 - 1, pos.2 );
-                    if !( is_in_bounds(down) && self.data.get(down).unwrap().blockdef != 0 ) {
-                        make_quad_cubeface(&mut tverts, &mut tinds, pos, bdef, (0, -1, 0, 0, 0, -1, -1, 0, 0));
-                    }
-                } else {
-                    make_quad_cubeface(&mut tverts, &mut tinds, pos, bdef, (0, -1, 0, 0, 0, -1, -1, 0, 0));
-                }
-                // plus x
-                let xp = (pos.0 + 1, pos.1, pos.2 );
-                if !( is_in_bounds(xp) && self.data.get(xp).unwrap().blockdef != 0 ) {
-                    make_quad_cubeface(&mut tverts, &mut tinds, pos, bdef, (1, 0, 0, 0, 0, 1, 0, 1, 0));
-                }
-                // minus x
-                if pos.0 > 0 {
-                    let xm = (pos.0 - 1, pos.1, pos.2 );
-                    if !( is_in_bounds(xm) && self.data.get(xm).unwrap().blockdef != 0 ) {
-                        make_quad_cubeface(&mut tverts, &mut tinds, pos, bdef, (-1, 0, 0, 0, -1, 0, 0, 0, -1));
-                    }
-                } else {
-                    make_quad_cubeface(&mut tverts, &mut tinds, pos, bdef, (-1, 0, 0, 0, -1, 0, 0, 0, -1));
-                }
-                // plus y
-                let yp = (pos.0, pos.1, pos.2 + 1 );
-                if !( is_in_bounds(yp) && self.data.get(yp).unwrap().blockdef != 0 ) {
-                    make_quad_cubeface(&mut tverts, &mut tinds, pos, bdef, (0, 0, 1, 0, 1, 0, 1, 0, 0));
-                }
-                // minus y
-                if pos.2 > 0 {
-                    let ym = (pos.0, pos.1, pos.2 - 1 );
-                    if !( is_in_bounds(ym) && self.data.get(ym).unwrap().blockdef != 0 ) {
-                        make_quad_cubeface(&mut tverts, &mut tinds, pos, bdef, (0, 0, -1, -1, 0, 0, 0, -1, 0));
-                    }
-                } else {
-                    make_quad_cubeface(&mut tverts, &mut tinds, pos, bdef, (0, 0, -1, -1, 0, 0, 0, -1, 0));
-                }
-
+                shape_registry.get(bdef.shape_id).unwrap().generate_draw_buffers( &mut tverts, &mut tinds, &bdef, bi.exparam, &self.data, pos);
             }
         }
 
@@ -121,7 +82,7 @@ fn add_vert_with_i(tverts: &mut Vec<Vertex>, find: Vertex) -> u16 {
     res_len.try_into().unwrap()
 }
 
-fn make_quad_cubeface(tverts: &mut Vec<Vertex>, tinds: &mut Vec<u16>, pos: (usize, usize, usize), bdef: &super::block::Block, dir: (i16, i16, i16, i16, i16, i16, i16, i16, i16) ) {
+/* fn make_quad_cubeface(tverts: &mut Vec<Vertex>, tinds: &mut Vec<u16>, pos: (usize, usize, usize), bdef: &super::block::Block, dir: (i16, i16, i16, i16, i16, i16, i16, i16, i16) ) {
     let center = (pos.0 as f32 + 0.5 + dir.0 as f32 / 2., pos.1 as f32 + 0.5 + dir.1 as f32 / 2., pos.2 as f32 + 0.5 + dir.2 as f32 / 2.);
 
     let tl = add_vert_with_i( tverts, Vertex::new( [ center.0 - 0.5 * dir.3 as f32 - 0.5 * dir.6 as f32, center.1 - 0.5 * dir.4 as f32 - 0.5 * dir.7 as f32, center.2 - 0.5 * dir.5 as f32 - 0.5 * dir.8 as f32 ],
@@ -148,7 +109,7 @@ fn make_quad_cubeface(tverts: &mut Vec<Vertex>, tinds: &mut Vec<u16>, pos: (usiz
     tinds.push(bl);
     tinds.push(br);
     tinds.push(tr);
-}
+} */
 
 pub struct ChunkDrawCache {
     pub vertices: Box<[Vertex]>,

@@ -45,6 +45,7 @@ struct State<'a> {
     block_atlas: atlas_tex::AtlasTexture,
     mouse_pressed: bool,
     block_registry: block::BlockRegistry<'a>,
+    shape_registry: block::BlockShapeRegistry,
     colormap_bind_group: wgpu::BindGroup,
 }
 
@@ -115,6 +116,9 @@ impl<'a> State<'a> {
         let mut block_registry = block::BlockRegistry::new();
         let mut block_atlas = atlas_tex::AtlasTexture::new(&device, &queue, wgpu::TextureFormat::R8Uint, (16, 16) );
 
+        let mut shape_registry = block::BlockShapeRegistry::new();
+        let cube_idx = shape_registry.add( block::make_cube_shape() );
+
         let pal_bytes = include_bytes!("../res/palette.png");
         let pal_img = image::load_from_memory(pal_bytes).unwrap();
 
@@ -122,13 +126,13 @@ impl<'a> State<'a> {
         let cir_image = image::load_from_memory(cir_bytes).unwrap();
         let cir_texture = texture::Texture::from_image_palettize(&device, &queue, &cir_image, &pal_img, Some("../res/test_block_circuit.png")).unwrap();
 
-        let _ = block_registry.add(&"Circuit", block_atlas.add_texture(&cir_texture, &device, &queue).unwrap() );
+        let _ = block_registry.add( cube_idx, &"Circuit", Box::new([ block_atlas.add_texture(&cir_texture, &device, &queue).unwrap() ]) );
 
         let blu_bytes = include_bytes!("../res/test_block_bluechunk.png");
         let blu_image = image::load_from_memory(blu_bytes).unwrap();
         let blu_texture = texture::Texture::from_image_palettize(&device, &queue, &blu_image, &pal_img, Some("../res/test_block_bluechunk.png")).unwrap();
 
-        let _ = block_registry.add(&"Blue Chunk", block_atlas.add_texture(&blu_texture, &device, &queue).unwrap() );
+        let _ = block_registry.add( cube_idx, &"Blue Chunk", Box::new([ block_atlas.add_texture(&blu_texture, &device, &queue).unwrap() ]) );
 
 
 
@@ -362,6 +366,7 @@ impl<'a> State<'a> {
             diffuse_bind_group,
             block_atlas,
             block_registry,
+            shape_registry,
             mouse_pressed: false,
             colormap_bind_group,
         }
@@ -599,7 +604,7 @@ pub async fn run() {
         ch.data[ (x, 15, 0) ].blockdef = 0;
     }
 
-    ch.update_draw_cache(&state.block_registry);
+    ch.update_draw_cache(&state.block_registry, &state.shape_registry);
     state.change_buffers(&ch.draw_cache.vertices, &ch.draw_cache.indices);
 
     let _ = event_loop.run(move |event, control_flow| {

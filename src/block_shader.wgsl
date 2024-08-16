@@ -46,6 +46,9 @@ var t_lightmap: texture_2d<f32>;
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = textureLoad( t_diffuse, vec2<u32>( u32( in.uv[0] * f32(textureDimensions(t_diffuse, 0)[0]) ), u32( in.uv[1] * f32(textureDimensions(t_diffuse, 0)[1]) ) ), in.array_index, 0);
+    if (color.r == 255) {
+        return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    }
     let light_row: u32 = 7 - u32( floor( in.light * 7.0 + 0.5 ) );
     return textureLoad( t_lightmap, vec2<u32>( color.r, light_row ), 0 );
 }
