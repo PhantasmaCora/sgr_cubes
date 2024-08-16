@@ -46,6 +46,7 @@ struct State<'a> {
     mouse_pressed: bool,
     block_registry: block::BlockRegistry<'a>,
     shape_registry: block::BlockShapeRegistry,
+    chunk_manager: chunk::ChunkManager,
     colormap_bind_group: wgpu::BindGroup,
 }
 
@@ -74,9 +75,12 @@ impl<'a> State<'a> {
             },
         ).await.unwrap();
 
+        let mut feature_list = wgpu::Features::empty();
+        feature_list.insert( wgpu::Features::CLEAR_TEXTURE );
+
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
+                required_features: feature_list,
                 // WebGL doesn't support all of wgpu's features, so if
                 // we're building for the web, we'll have to disable some.
                required_limits: if cfg!(target_arch = "wasm32") {
@@ -134,7 +138,7 @@ impl<'a> State<'a> {
 
         let _ = block_registry.add( cube_idx, &"Blue Chunk", Box::new([ block_atlas.add_texture(&blu_texture, &device, &queue).unwrap() ]) );
 
-
+        let mut chunk_manager = chunk::ChunkManager::new();
 
 
         let texture_bind_group_layout =
@@ -367,6 +371,7 @@ impl<'a> State<'a> {
             block_atlas,
             block_registry,
             shape_registry,
+            chunk_manager,
             mouse_pressed: false,
             colormap_bind_group,
         }
@@ -448,33 +453,51 @@ impl<'a> State<'a> {
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let draw_chunk_list = self.chunk_manager.get_render_chunks();
 
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render Encoder"),
         });
 
-        {
+        let mut first = true;
+
+        for idx in 0..draw_chunk_list.len() {
+            let c = &draw_chunk_list[idx];
+
+            let vertex_buffer = self.device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&c.vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                }
+            );
+            let index_buffer = self.device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: bytemuck::cast_slice(&c.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                }
+            );
+            let num_indices = c.indices.len() as u32;
+
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_texture.view,
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
+                        load: if first {wgpu::LoadOp::Clear(1.0)} else {wgpu::LoadOp::Load},
                         store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
@@ -482,16 +505,17 @@ impl<'a> State<'a> {
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
+            first = false;
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(2, &self.colormap_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
-        }
+            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..num_indices, 0, 0..1);
 
+        }
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
@@ -596,16 +620,24 @@ pub async fn run() {
     //window.set_cursor_visible(false);
 
     // make chunk for testing
-    let mut ch = Chunk::new();
+    //let mut ch = Chunk::new();
 
     // iterate over blockinstances in the chunk until done.
-    for x in 0..16 {
-        ch.data[ (x, 15, 1) ].blockdef = 2;
-        ch.data[ (x, 15, 0) ].blockdef = 0;
+    //for x in 0..16 {
+    //    ch.data[ (x, 15, 1) ].blockdef = 2;
+    //    ch.data[ (x, 15, 0) ].blockdef = 0;
+    //}
+
+    //ch.update_draw_cache(&state.block_registry, &state.shape_registry);
+
+    {
+        let bi = state.chunk_manager.get_mut_block( ( 63, 31, 63 ) );
+        bi.blockdef = 2;
     }
 
-    ch.update_draw_cache(&state.block_registry, &state.shape_registry);
-    state.change_buffers(&ch.draw_cache.vertices, &ch.draw_cache.indices);
+    {
+        state.chunk_manager.update_dirty_chunks( &state.block_registry, &state.shape_registry );
+    }
 
     let _ = event_loop.run(move |event, control_flow| {
         match event {

@@ -78,7 +78,7 @@ pub struct BlockShape {
 }
 
 impl BlockShape {
-    pub fn generate_draw_buffers(&self, vertex_buffer: &mut Vec<super::Vertex>, index_buffer: &mut Vec<u16>, blockdef: &Block, exparam: u8, chunk_view: &ndarray::Array3<super::chunk::BlockInstance>, pos: (usize, usize, usize) ) {
+    pub fn generate_draw_buffers(&self, vertex_buffer: &mut Vec<super::Vertex>, index_buffer: &mut Vec<u16>, blockdef: &Block, exparam: u8, chunk_view: &ndarray::Array3<super::chunk::BlockInstance>, world_pos: (usize, usize, usize), pos: (usize, usize, usize) ) {
         for fi in self.faces.iter().enumerate() {
             let (f, face) = fi;
 
@@ -99,7 +99,7 @@ impl BlockShape {
             for vertdef in face.vertices.iter() {
                 temp_indices.push( vertex_buffer.len().try_into().unwrap() );
                 let tex_index = blockdef.textures[ min( f, blockdef.textures.len() - 1 ) ];
-                vertex_buffer.push( super::Vertex::new( [ center.x + vertdef[0], center.y + vertdef[1], center.z + vertdef[2] ], [vertdef[3], vertdef[4]], tex_index, 1.0) );
+                vertex_buffer.push( super::Vertex::new( [ world_pos.0 as f32 + center.x + vertdef[0], world_pos.1 as f32 + center.y + vertdef[1], world_pos.2 as f32 + center.z + vertdef[2] ], [vertdef[3], vertdef[4]], tex_index, 1.0) );
             }
 
             for ind in face.indices.into_iter() {
