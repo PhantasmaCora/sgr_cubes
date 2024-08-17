@@ -151,6 +151,18 @@ pub fn make_cube_shape() -> BlockShape {
         ]),
         obstructs: [true; 6]
     }
+}
 
+pub fn make_slope_shape() -> BlockShape {
+    BlockShape {
+        faces: Box::new([
+            FaceDef{ obstructed_by: Some(Direction::MinusY), vertices: Box::new([ [ -0.5, -0.5, -0.5, 0.0, 0.0 ], [ 0.5, -0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 1, 2, 1, 3, 2 ]) }, // minus Y cube face
+            FaceDef{ obstructed_by: Some(Direction::MinusZ), vertices: Box::new([ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ -0.5, 0.5, -0.5, 1.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ -0.5, -0.5, -0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 2, 1, 1, 2, 3 ]) }, // minus Z cube face
+            FaceDef{ obstructed_by: Some(Direction::PlusX), vertices: Box::new([ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 2, 1]) }, // plus X tri face
+            FaceDef{ obstructed_by: Some(Direction::MinusX), vertices: Box::new([ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ -0.5, -0.5, -0.5, 0.0, 1.0 ], [ -0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 1, 2]) }, // minus X tri face
+            FaceDef{ obstructed_by: None, vertices: Box::new([ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 2, 1, 1, 2, 3 ]) },
+        ]),
+        obstructs: [ false, true, false, false, false, true ]
+    }
 }
 

@@ -122,6 +122,7 @@ impl<'a> State<'a> {
 
         let mut shape_registry = block::BlockShapeRegistry::new();
         let cube_idx = shape_registry.add( block::make_cube_shape() );
+        let tri_idx = shape_registry.add( block::make_slope_shape() );
 
         let pal_bytes = include_bytes!("../res/palette.png");
         let pal_img = image::load_from_memory(pal_bytes).unwrap();
@@ -135,8 +136,10 @@ impl<'a> State<'a> {
         let blu_bytes = include_bytes!("../res/test_block_bluechunk.png");
         let blu_image = image::load_from_memory(blu_bytes).unwrap();
         let blu_texture = texture::Texture::from_image_palettize(&device, &queue, &blu_image, &pal_img, Some("../res/test_block_bluechunk.png")).unwrap();
+        let blu_tex_idx = block_atlas.add_texture(&blu_texture, &device, &queue).unwrap();
 
-        let _ = block_registry.add( cube_idx, &"Blue Chunk", Box::new([ block_atlas.add_texture(&blu_texture, &device, &queue).unwrap() ]) );
+        let _ = block_registry.add( cube_idx, &"Blue Chunk", Box::new([ blu_tex_idx ]) );
+        let _ = block_registry.add( tri_idx, &"Blue Chunk Slope", Box::new([ blu_tex_idx ]) );
 
         let mut chunk_manager = chunk::ChunkManager::new();
 
@@ -633,6 +636,8 @@ pub async fn run() {
     {
         let bi = state.chunk_manager.get_mut_block( ( 63, 31, 63 ) );
         bi.blockdef = 2;
+        let bi_2 = state.chunk_manager.get_mut_block( ( 64, 32, 63 ) );
+        bi_2.blockdef = 3;
     }
 
     {
