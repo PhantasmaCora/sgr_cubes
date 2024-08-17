@@ -1,4 +1,4 @@
-#[path = "ctx_winit.rs"]
+
 mod wctx;
 use wctx::run;
 

@@ -5,7 +5,7 @@ use ndarray::{
 
 use crate::wctx::Vertex;
 
-use super::block::{
+use crate::wctx::block::{
     BlockRegistry,
     BlockShapeRegistry
 };

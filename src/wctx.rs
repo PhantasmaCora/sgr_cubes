@@ -16,12 +16,13 @@ use cgmath::SquareMatrix;
 mod camera;
 
 mod chunk;
-use chunk::Chunk;
 
 mod texture;
 mod atlas_tex;
 
 mod block;
+
+mod rotation_group;
 
 struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -141,7 +142,7 @@ impl<'a> State<'a> {
         let _ = block_registry.add( cube_idx, &"Blue Chunk", Box::new([ blu_tex_idx ]) );
         let _ = block_registry.add( tri_idx, &"Blue Chunk Slope", Box::new([ blu_tex_idx ]) );
 
-        let mut chunk_manager = chunk::ChunkManager::new();
+        let chunk_manager = chunk::ChunkManager::new();
 
 
         let texture_bind_group_layout =
