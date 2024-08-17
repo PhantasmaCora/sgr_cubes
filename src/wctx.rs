@@ -623,17 +623,6 @@ pub async fn run() {
     //.unwrap();
     //window.set_cursor_visible(false);
 
-    // make chunk for testing
-    //let mut ch = Chunk::new();
-
-    // iterate over blockinstances in the chunk until done.
-    //for x in 0..16 {
-    //    ch.data[ (x, 15, 1) ].blockdef = 2;
-    //    ch.data[ (x, 15, 0) ].blockdef = 0;
-    //}
-
-    //ch.update_draw_cache(&state.block_registry, &state.shape_registry);
-
     {
         let bi = state.chunk_manager.get_mut_block( ( 63, 31, 63 ) );
         bi.blockdef = 2;
@@ -644,6 +633,8 @@ pub async fn run() {
     {
         state.chunk_manager.update_dirty_chunks( &state.block_registry, &state.shape_registry );
     }
+
+    let mut last_update = Instant::now();
 
     let _ = event_loop.run(move |event, control_flow| {
         match event {
@@ -692,6 +683,19 @@ pub async fn run() {
                 }
             }
             Event::AboutToWait => {
+                let ins = Instant::now();
+                if ins.duration_since(last_update) > std::time::Duration::new(4, 0) {
+                    last_update = ins;
+                    {
+                        let bi_2 = state.chunk_manager.get_mut_block( ( 64, 32, 63 ) );
+                        bi_2.exparam = ( bi_2.exparam + 1 ) % 12;
+                    }
+
+                    {
+                        state.chunk_manager.update_dirty_chunks( &state.block_registry, &state.shape_registry );
+                    }
+                }
+
                 // RedrawRequested will only trigger once unless we manually
                 // request it.
                 state.window().request_redraw();

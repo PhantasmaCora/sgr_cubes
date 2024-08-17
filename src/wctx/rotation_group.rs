@@ -1,33 +1,37 @@
 
 
-
 use cgmath::Vector3;
+use cgmath::Quaternion;
+use cgmath::One;
+use cgmath::InnerSpace;
+use cgmath::AbsDiffEq;
 
 pub enum RotType {
+    Static,
     RotFace,
     RotVert,
     RotEdge,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum RotFace {
-    PlusY,
-    MinusY,
     PlusZ,
     MinusZ,
+    PlusY,
+    MinusY,
     PlusX,
     MinusX
 }
 
-pub fn rf_to_vector(rf: RotFace) -> Vector3<i32> {
+pub fn rf_to_vector(rf: RotFace) -> Vector3<f32> {
     match rf {
-        RotFace::PlusZ => Vector3::<i32>::unit_z(),
-        RotFace::MinusZ => -1 * Vector3::<i32>::unit_z(),
-        RotFace::PlusX => Vector3::<i32>::unit_x(),
-        RotFace::MinusX => -1 * Vector3::<i32>::unit_x(),
-        RotFace::PlusY => Vector3::<i32>::unit_y(),
-        RotFace::MinusY => -1 * Vector3::<i32>::unit_y()
+        RotFace::PlusZ => Vector3::<f32>::unit_z(),
+        RotFace::MinusZ => -1.0 * Vector3::<f32>::unit_z(),
+        RotFace::PlusX => Vector3::<f32>::unit_x(),
+        RotFace::MinusX => -1.0 * Vector3::<f32>::unit_x(),
+        RotFace::PlusY => Vector3::<f32>::unit_y(),
+        RotFace::MinusY => -1.0 * Vector3::<f32>::unit_y()
     }
 }
 
@@ -42,23 +46,55 @@ pub fn reverse_rf(rf: RotFace) -> RotFace {
     }
 }
 
-pub fn vector_to_rf( vect: Vector3<i32> ) -> Option<RotFace> {
-    if vect == Vector3::<i32>::unit_y() { return Some(RotFace::PlusY); }
-    if vect == -1 * Vector3::<i32>::unit_y() { return Some(RotFace::MinusY); }
-    if vect == Vector3::<i32>::unit_z() { return Some(RotFace::PlusZ); }
-    if vect == -1 * Vector3::<i32>::unit_z() { return Some(RotFace::MinusZ); }
-    if vect == Vector3::<i32>::unit_x() { return Some(RotFace::PlusX); }
-    if vect == -1 * Vector3::<i32>::unit_x() { return Some(RotFace::MinusX); }
+pub fn num_to_rf(num: u8) -> Option<RotFace> {
+    match num {
+        0 => Some(RotFace::PlusZ),
+        1 => Some(RotFace::MinusZ),
+        2 => Some(RotFace::PlusY),
+        3 => Some(RotFace::MinusY),
+        4 => Some(RotFace::PlusX),
+        5 => Some(RotFace::MinusX),
+        _ => None
+    }
+}
+
+pub fn rf_to_num(rf: RotFace) -> u8 {
+    match rf {
+        RotFace::PlusZ => 0,
+        RotFace::MinusZ => 1,
+        RotFace::PlusX => 4,
+        RotFace::MinusX => 5,
+        RotFace::PlusY => 2,
+        RotFace::MinusY => 3
+    }
+}
+
+pub fn vector_to_rf( vect: Vector3<f32> ) -> Option<RotFace> {
+    let mut vv = vect.normalize();
+
+    if vv.abs_diff_eq( &Vector3::<f32>::unit_y(), Vector3::<f32>::default_epsilon() ) { return Some(RotFace::PlusY); }
+    if vv.abs_diff_eq( &(-1.0 * Vector3::<f32>::unit_y()), Vector3::<f32>::default_epsilon() ) { return Some(RotFace::MinusY); }
+    if vv.abs_diff_eq( &Vector3::<f32>::unit_z(), Vector3::<f32>::default_epsilon() ) { return Some(RotFace::PlusZ); }
+    if vv.abs_diff_eq( &(-1.0 * Vector3::<f32>::unit_z()), Vector3::<f32>::default_epsilon() ) { return Some(RotFace::MinusZ); }
+    if vv.abs_diff_eq( &Vector3::<f32>::unit_x(), Vector3::<f32>::default_epsilon() ) { return Some(RotFace::PlusX); }
+    if vv.abs_diff_eq( &(-1.0 * Vector3::<f32>::unit_x()), Vector3::<f32>::default_epsilon() ) { return Some(RotFace::MinusX); }
 
     None
 }
 
-pub fn rotate_rf( rf: RotFace, quat: &cgmath::Quaternion<f32> ) -> Option<RotFace> {
-    let v: Vector3<f32> = i_to_f( rf_to_vector(rf) );
-    vector_to_rf( f_to_i( quat * v ) )
+pub fn rotate_rf( rf: RotFace, quat: &Quaternion<f32> ) -> Option<RotFace> {
+    let v = rf_to_vector(rf);
+    vector_to_rf( quat.normalize() * v )
 }
 
-#[derive(Copy, Clone)]
+pub fn generate_quat_from_rf( rf: RotFace ) -> Quaternion<f32> {
+    let zero = rf_to_vector(RotFace::PlusZ).normalize();
+    let input = rf_to_vector(rf).normalize();
+
+    Quaternion::<f32>::from_arc( zero, input, Some(zero) ).normalize()
+}
+
+#[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum RotVert {
     XmYmZm, // minus x minus y minus z
@@ -84,40 +120,61 @@ pub fn reverse_rv( rv: RotVert ) -> RotVert {
     }
 }
 
-pub fn rv_to_vector(rv: RotVert) -> Vector3<i32> {
-    match rv {
-        RotVert::XmYmZm => Vector3::<i32>::new( -1, -1, -1 ),
-        RotVert::XmYmZp => Vector3::<i32>::new( -1, -1, 1 ),
-        RotVert::XmYpZm => Vector3::<i32>::new( -1, 1, -1 ),
-        RotVert::XmYpZp => Vector3::<i32>::new( -1, 1, 1 ),
-        RotVert::XpYmZm => Vector3::<i32>::new( 1, -1, -1 ),
-        RotVert::XpYmZp => Vector3::<i32>::new( 1, -1, 1 ),
-        RotVert::XpYpZm => Vector3::<i32>::new( 1, 1, -1 ),
-        RotVert::XpYpZp => Vector3::<i32>::new( 1, 1, 1 )
-    }
-}
-
-pub fn vector_to_rv( vect: &Vector3<i32> ) -> Option<RotVert> {
-    let tup: &(i32, i32, i32) = vect.as_ref();
-    match tup {
-        (-1, -1, -1) => Some(RotVert::XmYmZm),
-        (-1, -1, 1) => Some(RotVert::XmYmZp),
-        (-1, 1, -1) => Some(RotVert::XmYpZm),
-        (-1, 1, 1) => Some(RotVert::XmYpZp),
-        (1, -1, -1) => Some(RotVert::XpYmZm),
-        (1, -1, 1) => Some(RotVert::XpYmZp),
-        (1, 1, -1) => Some(RotVert::XpYpZm),
-        (1, 1, 1) => Some(RotVert::XpYpZp),
+pub fn num_to_rv(num: u8) -> Option<RotVert> {
+    match num {
+        0 => Some(RotVert::XmYmZm),
+        1 => Some(RotVert::XmYmZp),
+        2 => Some(RotVert::XmYpZm),
+        3 => Some(RotVert::XmYpZp),
+        4 => Some(RotVert::XpYmZm),
+        5 => Some(RotVert::XpYmZp),
+        6 => Some(RotVert::XpYpZm),
+        7 => Some(RotVert::XpYpZp),
         _ => None
     }
 }
 
-pub fn rotate_rv( rv: RotVert, quat: &cgmath::Quaternion<f32> ) -> Option<RotVert> {
-    let v: Vector3<f32> = i_to_f( rv_to_vector(rv) );
-    vector_to_rv( &f_to_i( quat * v ) )
+pub fn rv_to_vector(rv: RotVert) -> Vector3<f32> {
+    match rv {
+        RotVert::XmYmZm => Vector3::<f32>::new( -1.0, -1.0, -1.0 ),
+        RotVert::XmYmZp => Vector3::<f32>::new( -1.0, -1.0, 1.0 ),
+        RotVert::XmYpZm => Vector3::<f32>::new( -1.0, 1.0, -1.0 ),
+        RotVert::XmYpZp => Vector3::<f32>::new( -1.0, 1.0, 1.0 ),
+        RotVert::XpYmZm => Vector3::<f32>::new( 1.0, -1.0, -1.0 ),
+        RotVert::XpYmZp => Vector3::<f32>::new( 1.0, -1.0, 1.0 ),
+        RotVert::XpYpZm => Vector3::<f32>::new( 1.0, 1.0, -1.0 ),
+        RotVert::XpYpZp => Vector3::<f32>::new( 1.0, 1.0, 1.0 )
+    }
 }
 
-#[derive(Copy, Clone)]
+pub fn vector_to_rv( vect: Vector3<f32> ) -> Option<RotVert> {
+    let tup: &(f32, f32, f32) = vect.as_ref();
+    match tup {
+        (-1.0, -1.0, -1.0) => Some(RotVert::XmYmZm),
+        (-1.0, -1.0, 1.0) => Some(RotVert::XmYmZp),
+        (-1.0, 1.0, -1.0) => Some(RotVert::XmYpZm),
+        (-1.0, 1.0, 1.0) => Some(RotVert::XmYpZp),
+        (1.0, -1.0, -1.0) => Some(RotVert::XpYmZm),
+        (1.0, -1.0, 1.0) => Some(RotVert::XpYmZp),
+        (1.0, 1.0, -1.0) => Some(RotVert::XpYpZm),
+        (1.0, 1.0, 1.0) => Some(RotVert::XpYpZp),
+        _ => None
+    }
+}
+
+pub fn rotate_rv( rv: RotVert, quat: &Quaternion<f32> ) -> Option<RotVert> {
+    let v = rv_to_vector(rv);
+    vector_to_rv( quat * v )
+}
+
+pub fn generate_quat_from_rv( rv: RotVert ) -> Quaternion<f32> {
+    let zero = rv_to_vector(RotVert::XmYmZm).normalize();
+    let input = rv_to_vector(rv).normalize();
+
+    Quaternion::<f32>::from_arc( zero, input, Some(zero) ).normalize()
+}
+
+#[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum RotEdge {
     TopZm,
@@ -151,50 +208,69 @@ pub fn reverse_re( re: RotEdge ) -> RotEdge {
     }
 }
 
-pub fn re_to_vector( re: RotEdge ) -> Vector3<i32> {
-    match re {
-        RotEdge::TopZm => Vector3::<i32>::new(0, 1, -1),
-        RotEdge::TopZp => Vector3::<i32>::new(0, 1, 1),
-        RotEdge::TopXm => Vector3::<i32>::new(-1, 1, 0),
-        RotEdge::TopXp => Vector3::<i32>::new(1, 1, 0),
-        RotEdge::MidZmXm => Vector3::<i32>::new(-1, 0, -1),
-        RotEdge::MidZpXp => Vector3::<i32>::new(1, 0, 1),
-        RotEdge::MidZpXm => Vector3::<i32>::new(1, 0, -1),
-        RotEdge::MidZmXp => Vector3::<i32>::new(-1, 0, 1),
-        RotEdge::LowZm => Vector3::<i32>::new(0, -1, -1),
-        RotEdge::LowZp => Vector3::<i32>::new(0, -1, 1),
-        RotEdge::LowXm => Vector3::<i32>::new(-1, -1, 0),
-        RotEdge::LowXp => Vector3::<i32>::new(1, -1, 0)
+pub fn num_to_re(num: u8) -> Option<RotEdge> {
+    match num {
+        0 => Some(RotEdge::LowZm),
+        1 => Some(RotEdge::LowZp),
+        2 => Some(RotEdge::LowXm),
+        3 => Some(RotEdge::LowXp),
+        4 => Some(RotEdge::MidZmXm),
+        5 => Some(RotEdge::MidZpXp),
+        6 => Some(RotEdge::MidZpXm),
+        7 => Some(RotEdge::MidZmXp),
+        8 => Some(RotEdge::TopZm),
+        9 => Some(RotEdge::TopZp),
+        10 => Some(RotEdge::TopXm),
+        11 => Some(RotEdge::TopXp),
+        _ => None
     }
 }
 
-pub fn vector_to_re( vect: &Vector3<i32> ) -> Option<RotEdge> {
+
+pub fn re_to_vector( re: RotEdge ) -> Vector3<f32> {
+    match re {
+        RotEdge::TopZm => Vector3::<f32>::new(0.0, 1.0, -1.0),
+        RotEdge::TopZp => Vector3::<f32>::new(0.0, 1.0, 1.0),
+        RotEdge::TopXm => Vector3::<f32>::new(-1.0, 1.0, 0.0),
+        RotEdge::TopXp => Vector3::<f32>::new(1.0, 1.0, 0.0),
+        RotEdge::MidZmXm => Vector3::<f32>::new(-1.0, 0.0, -1.0),
+        RotEdge::MidZpXp => Vector3::<f32>::new(1.0, 0.0, 1.0),
+        RotEdge::MidZpXm => Vector3::<f32>::new(1.0, 0.0, -1.0),
+        RotEdge::MidZmXp => Vector3::<f32>::new(-1.0, 0.0, 1.0),
+        RotEdge::LowZm => Vector3::<f32>::new(0.0, -1.0, -1.0),
+        RotEdge::LowZp => Vector3::<f32>::new(0.0, -1.0, 1.0),
+        RotEdge::LowXm => Vector3::<f32>::new(-1.0, -1.0, 0.0),
+        RotEdge::LowXp => Vector3::<f32>::new(1.0, -1.0, 0.0)
+    }
+}
+
+pub fn vector_to_re( vect: Vector3<f32> ) -> Option<RotEdge> {
     let mut n_high: u8 = 0;
-    if vect.y == 0 {
+    if vect.y == 0.0 {
         n_high = 1;
-    } else if vect.y < 0 {
+    } else if vect.y < 0.0 {
         n_high = 2;
     }
 
     let mut n_low: u8 = 255;
     if n_high == 1 {
-        if vect.x < 0 && vect.z < 0 {
+        if vect.x < 0.0 && vect.z < 0.0 {
             n_low = 0;
-        } else if vect.x > 0 && vect.z > 0 {
+        } else if vect.x > 0.0 && vect.z > 0.0 {
             n_low = 1;
-        } else if vect.z > 0 && vect.x < 0{
+        } else if vect.z > 0.0 && vect.x < 0.0 {
             n_low = 2;
-        } else if vect.z < 0 && vect.x > 0 {
+        } else if vect.z < 0.0 && vect.x > 0.0 {
             n_low = 3;
         }
     } else {
-        if vect.x == 0 && vect.z < 0 {
+        if vect.x == 0.0 && vect.z < 0.0 {
             n_low = 0;
-        } else if vect.x == 0 && vect.z > 0 {
+        } else if vect.x == 0.0 && vect.z > 0.0 {
             n_low = 1;
-        } else if vect.z == 0 && vect.x > 0{
+        } else if vect.z == 0.0 && vect.x > 0.0 {
             n_low = 2;
-        } else if vect.z == 0 && vect.x < 0 {
+        } else if vect.z == 0.0 && vect.x < 0.0 {
             n_low = 3;
         }
     }
@@ -216,15 +292,25 @@ pub fn vector_to_re( vect: &Vector3<i32> ) -> Option<RotEdge> {
     }
 }
 
-pub fn rotate_re( re: RotEdge, quat: &cgmath::Quaternion<f32> ) -> Option<RotEdge> {
-    let v: Vector3<f32> = i_to_f( re_to_vector(re) );
-    vector_to_re( &f_to_i( quat * v ) )
+pub fn rotate_re( re: RotEdge, quat: &Quaternion<f32> ) -> Option<RotEdge> {
+    let v = re_to_vector(re);
+    vector_to_re( quat * v )
 }
 
-fn i_to_f( vect: Vector3<i32> ) -> Vector3<f32> {
-    Vector3::<f32>::new( vect.x as f32, vect.y as f32, vect.z as f32 )
-}
-
-fn f_to_i( vect: Vector3<f32> ) -> Vector3<i32> {
-    Vector3::<i32>::new( vect.x as i32, vect.y as i32, vect.z as i32 )
+pub fn generate_quat_from_re( re: RotEdge ) -> Quaternion<f32> {
+    let q = match re {
+        RotEdge::TopZm => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(0.0, 1.0, 0.0), None ),
+        RotEdge::TopZp => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(0.0, 1.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(0.0, 0.0, 1.0), None ),
+        RotEdge::TopXm => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(0.0, 1.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(-1.0, 0.0, 0.0), None ),
+        RotEdge::TopXp => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(0.0, 1.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(1.0, 0.0, 0.0), None ),
+        RotEdge::MidZmXm => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(-1.0, 0.0, 0.0), None ),
+        RotEdge::MidZpXp => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(-1.0, 0.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(0.0, 0.0, 1.0), None ),
+        RotEdge::MidZpXm => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(1.0, 0.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, 1.0), Vector3::<f32>::new(0.0, 1.0, 0.0), None ),
+        RotEdge::MidZmXp => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(-1.0, 0.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, 1.0), Vector3::<f32>::new(0.0, -1.0, 0.0), None ),
+        RotEdge::LowZm => Quaternion::one(),
+        RotEdge::LowZp => Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(0.0, 0.0, 1.0), None ),
+        RotEdge::LowXm => Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(-1.0, 0.0, 0.0), None ),
+        RotEdge::LowXp => Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(1.0, 0.0, 0.0), None )
+    };
+    q.normalize()
 }

@@ -73,6 +73,7 @@ impl Chunk {
         self.draw_cache.vertices = tverts.into_boxed_slice();
         self.draw_cache.indices = tinds.into_boxed_slice();
 
+        self.dirty = false;
     }
 
 }

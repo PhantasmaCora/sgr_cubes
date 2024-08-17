@@ -5,6 +5,7 @@ use std::cmp::min;
 use crate::wctx::rotation_group;
 use crate::wctx::rotation_group::RotFace;
 
+use cgmath::One;
 
 
 pub struct Block<'a> {
@@ -46,18 +47,34 @@ impl<'a> BlockRegistry<'a> {
 
 pub struct BlockShape {
     faces: Box<[FaceDef]>,
-    obstructs: [bool; 6]
+    obstructs: [bool; 6],
+    rot_group: rotation_group::RotType
 }
 
 impl BlockShape {
     pub fn generate_draw_buffers(&self, vertex_buffer: &mut Vec<super::Vertex>, index_buffer: &mut Vec<u16>, blockdef: &Block, exparam: u8, chunk_view: &ndarray::Array3<super::chunk::BlockInstance>, world_pos: (usize, usize, usize), pos: (usize, usize, usize) ) {
+        let mut quat = cgmath::Quaternion::<f32>::one();
+        match self.rot_group {
+            rotation_group::RotType::RotFace => {
+                quat = rotation_group::generate_quat_from_rf( rotation_group::num_to_rf( exparam & 0b0000_0111 ).unwrap() );
+            },
+            rotation_group::RotType::RotVert => {
+                quat = rotation_group::generate_quat_from_rv( rotation_group::num_to_rv( exparam & 0b0000_0111 ).unwrap() );
+            },
+            rotation_group::RotType::RotEdge => {
+                quat = rotation_group::generate_quat_from_re( rotation_group::num_to_re( exparam & 0b0000_1111 ).unwrap() );
+            },
+            rotation_group::RotType::Static => {},
+            _ => {}
+        }
+
         for fi in self.faces.iter().enumerate() {
             let (f, face) = fi;
 
             // check whether there's an obstruction here
-            if let Some(block_dir) = face.obstructed_by {
+            if let Some(obstruct) = face.obstructed_by {
                 let mut other_pos = cgmath::Vector3::<i32>::new( pos.0 as i32, pos.1 as i32, pos.2 as i32 );
-                other_pos += rotation_group::rf_to_vector(block_dir);
+                other_pos += rotation_group::rf_to_vector( rotation_group::rotate_rf(obstruct, &quat).unwrap() ).cast::<i32>().unwrap();
                 if other_pos.x >= 0 && other_pos.x < chunk_view.len_of(ndarray::Axis(0)) as i32 && other_pos.y >= 0 && other_pos.y < chunk_view.len_of(ndarray::Axis(1)) as i32 && other_pos.z >= 0 && other_pos.z < chunk_view.len_of(ndarray::Axis(2)) as i32 {
                     let b2 = &chunk_view[ [other_pos.x as usize, other_pos.y as usize, other_pos.z as usize] ];
                     if b2.blockdef != 0 {
@@ -71,7 +88,9 @@ impl BlockShape {
             for vertdef in face.vertices.iter() {
                 temp_indices.push( vertex_buffer.len().try_into().unwrap() );
                 let tex_index = blockdef.textures[ min( f, blockdef.textures.len() - 1 ) ];
-                vertex_buffer.push( super::Vertex::new( [ world_pos.0 as f32 + center.x + vertdef[0], world_pos.1 as f32 + center.y + vertdef[1], world_pos.2 as f32 + center.z + vertdef[2] ], [vertdef[3], vertdef[4]], tex_index, 1.0) );
+                let mut vec = cgmath::Vector3::new( vertdef[0], vertdef[1], vertdef[2] );
+                vec = quat * vec;
+                vertex_buffer.push( super::Vertex::new( [ world_pos.0 as f32 + center.x + vec.x, world_pos.1 as f32 + center.y + vec.y, world_pos.2 as f32 + center.z + vec.z ], [vertdef[3], vertdef[4]], tex_index, 1.0) );
             }
 
             for ind in face.indices.into_iter() {
@@ -121,7 +140,8 @@ pub fn make_cube_shape() -> BlockShape {
             FaceDef{ obstructed_by: Some(RotFace::PlusX), vertices: Box::new([ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, 0.5, 0.5, 1.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 1, 2, 1, 3, 2 ]) },
             FaceDef{ obstructed_by: Some(RotFace::MinusX), vertices: Box::new([ [ -0.5, 0.5, 0.5, 0.0, 0.0 ], [ -0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ -0.5, -0.5, -0.5, 1.0, 1.0 ] ]) , indices: Box::new([ 0, 1, 2, 1, 3, 2 ]) },
         ]),
-        obstructs: [true; 6]
+        obstructs: [true; 6],
+        rot_group: rotation_group::RotType::Static
     }
 }
 
@@ -134,7 +154,8 @@ pub fn make_slope_shape() -> BlockShape {
             FaceDef{ obstructed_by: Some(RotFace::MinusX), vertices: Box::new([ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ -0.5, -0.5, -0.5, 0.0, 1.0 ], [ -0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 1, 2]) }, // minus X tri face
             FaceDef{ obstructed_by: None, vertices: Box::new([ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 2, 1, 1, 2, 3 ]) },
         ]),
-        obstructs: [ false, true, false, false, false, true ]
+        obstructs: [ false, true, false, false, false, true ],
+        rot_group: rotation_group::RotType::RotEdge
     }
 }
 
