@@ -16,6 +16,7 @@ ndarray = "0.16.0"
 cgmath = "0.18"
 anyhow = "1.0"
 num = "0.4.3"
+toml = { version = "0.8.19", features = ["parse", "display", "preserve_order"] }
 
 [dependencies.image]
 version = "0.24"

@@ -189,7 +189,7 @@ impl Texture {
                     out_index = i as u8;
                 }
             }
-            image::Luma::<u8>{ 0: [out_index] }
+            image::Luma::<u8>([out_index])
         };
 
         let out_img = image::GrayImage::from_fn(dimensions.0, dimensions.1, convert_fn);

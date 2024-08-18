@@ -1,7 +1,7 @@
  
 // use image::GenericImageView;
 
-use super::texture::Texture;
+use crate::wctx::texture::Texture;
 
 
 

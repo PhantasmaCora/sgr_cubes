@@ -70,7 +70,7 @@ pub fn rf_to_num(rf: RotFace) -> u8 {
 }
 
 pub fn vector_to_rf( vect: Vector3<f32> ) -> Option<RotFace> {
-    let mut vv = vect.normalize();
+    let vv = vect.normalize();
 
     if vv.abs_diff_eq( &Vector3::<f32>::unit_y(), Vector3::<f32>::default_epsilon() ) { return Some(RotFace::PlusY); }
     if vv.abs_diff_eq( &(-1.0 * Vector3::<f32>::unit_y()), Vector3::<f32>::default_epsilon() ) { return Some(RotFace::MinusY); }
@@ -148,16 +148,16 @@ pub fn rv_to_vector(rv: RotVert) -> Vector3<f32> {
 }
 
 pub fn vector_to_rv( vect: Vector3<f32> ) -> Option<RotVert> {
-    let tup: &(f32, f32, f32) = vect.as_ref();
+    let tup = ( vect.x as i32, vect.y as i32, vect.z as i32 );
     match tup {
-        (-1.0, -1.0, -1.0) => Some(RotVert::XmYmZm),
-        (-1.0, -1.0, 1.0) => Some(RotVert::XmYmZp),
-        (-1.0, 1.0, -1.0) => Some(RotVert::XmYpZm),
-        (-1.0, 1.0, 1.0) => Some(RotVert::XmYpZp),
-        (1.0, -1.0, -1.0) => Some(RotVert::XpYmZm),
-        (1.0, -1.0, 1.0) => Some(RotVert::XpYmZp),
-        (1.0, 1.0, -1.0) => Some(RotVert::XpYpZm),
-        (1.0, 1.0, 1.0) => Some(RotVert::XpYpZp),
+        (-1, -1, -1) => Some(RotVert::XmYmZm),
+        (-1, -1, 1) => Some(RotVert::XmYmZp),
+        (-1, 1, -1) => Some(RotVert::XmYpZm),
+        (-1, 1, 1) => Some(RotVert::XmYpZp),
+        (1, -1, -1) => Some(RotVert::XpYmZm),
+        (1, -1, 1) => Some(RotVert::XpYmZp),
+        (1, 1, -1) => Some(RotVert::XpYpZm),
+        (1, 1, 1) => Some(RotVert::XpYpZp),
         _ => None
     }
 }
@@ -263,16 +263,14 @@ pub fn vector_to_re( vect: Vector3<f32> ) -> Option<RotEdge> {
         } else if vect.z < 0.0 && vect.x > 0.0 {
             n_low = 3;
         }
-    } else {
-        if vect.x == 0.0 && vect.z < 0.0 {
-            n_low = 0;
-        } else if vect.x == 0.0 && vect.z > 0.0 {
-            n_low = 1;
-        } else if vect.z == 0.0 && vect.x > 0.0 {
-            n_low = 2;
-        } else if vect.z == 0.0 && vect.x < 0.0 {
-            n_low = 3;
-        }
+    } else if vect.x == 0.0 && vect.z < 0.0 {
+        n_low = 0;
+    } else if vect.x == 0.0 && vect.z > 0.0 {
+        n_low = 1;
+    } else if vect.z == 0.0 && vect.x > 0.0 {
+        n_low = 2;
+    } else if vect.z == 0.0 && vect.x < 0.0 {
+        n_low = 3;
     }
 
     match ( n_high, n_low ) {

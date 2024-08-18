@@ -1,0 +1,5 @@
+
+[blue chunk]
+pretty_name = "Blue Chunk"
+texture_names = [ "blue_chunk.png" ]
+shape_name = "CubeStatic"

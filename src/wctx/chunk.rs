@@ -55,7 +55,7 @@ impl Chunk {
         let mut iiter = self.data.indexed_iter();
 
         // iterate over blockinstances in the chunk until done.
-        while let Some(tup) = iiter.next() {
+        for tup in iiter {
             let pos = tup.0;
             let bi = tup.1;
 
@@ -64,7 +64,7 @@ impl Chunk {
             }
 
             if let Some(bdef) = registry.get(bi.blockdef) {
-                shape_registry.get(bdef.shape_id).unwrap().generate_draw_buffers( &mut tverts, &mut tinds, &bdef, bi.exparam, &self.data, world_pos, pos);
+                shape_registry.get(bdef.shape_id).unwrap().generate_draw_buffers( &mut tverts, &mut tinds, bdef, bi.exparam, &self.data, world_pos, pos);
             }
         }
 
