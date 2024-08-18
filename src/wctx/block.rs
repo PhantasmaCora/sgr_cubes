@@ -8,33 +8,31 @@ use crate::wctx::rotation_group::RotFace;
 use cgmath::One;
 
 
-pub struct Block<'a> {
+pub struct Block {
     registry_id: u16,
-    pub shape_id: usize,
+    pub shape_id: u32,
     //parameter_type: ParamType,
-    pub textures: Box<[u32]>,
-    pub pretty_name: &'a str,
+    pub textures: Vec<u32>,
+    pub pretty_name: String,
 }
 
-pub struct BlockRegistry<'a> {
-    blocks: Box<Vec<Block<'a> >>,
+pub struct BlockRegistry {
+    blocks: Vec<Block>,
 }
 
-impl<'a> BlockRegistry<'a> {
-    pub fn new() -> BlockRegistry<'a> {
+impl BlockRegistry {
+    pub fn new() -> BlockRegistry {
         // Always create the air block at position zero!
-        let air = Block { registry_id: 0, shape_id: 0, pretty_name: &"Air", textures: Box::new([0]) };
-        let mut b = Vec::<Block>::new();
-        b.push(air);
-
-        let blocks = Box::new(b);
+        let air = Block { registry_id: 0, shape_id: 0, pretty_name: "Air".into(), textures: vec![0] };
+        let mut blocks = Vec::<Block>::new();
+        blocks.push(air);
 
         Self {
             blocks
         }
     }
 
-    pub fn add(&mut self, shape_id: usize, pretty_name: &'a str, textures: Box<[u32]> ) -> u16 {
+    pub fn add(&mut self, shape_id: u32, pretty_name: String, textures: Vec<u32> ) -> u16 {
         let registry_id = self.blocks.len() as u16;
         self.blocks.push( Block { registry_id, shape_id, pretty_name, textures } );
         registry_id
@@ -93,7 +91,7 @@ impl BlockShape {
                 vertex_buffer.push( super::Vertex::new( [ world_pos.0 as f32 + center.x + vec.x, world_pos.1 as f32 + center.y + vec.y, world_pos.2 as f32 + center.z + vec.z ], [vertdef[3], vertdef[4]], tex_index, 1.0) );
             }
 
-            for ind in face.indices.into_iter() {
+            for ind in face.indices.iter() {
                 index_buffer.push( temp_indices[ *ind as usize ] as u16 );
             }
         }
@@ -109,24 +107,24 @@ pub struct FaceDef {
 }
 
 pub struct BlockShapeRegistry {
-    pub bshapes: Box<Vec<BlockShape>>,
+    pub bshapes: Vec<BlockShape>,
 }
 
 impl BlockShapeRegistry {
     pub fn new() -> BlockShapeRegistry {
         Self{
-            bshapes: Box::new( Vec::<BlockShape>::new() ),
+            bshapes: Vec::<BlockShape>::new(),
         }
     }
 
-    pub fn add(&mut self, blockshape: BlockShape) -> usize {
-        let registry_id = self.bshapes.len();
+    pub fn add(&mut self, blockshape: BlockShape) -> u32 {
+        let registry_id = self.bshapes.len() as u32;
         self.bshapes.push( blockshape );
         registry_id
     }
 
-    pub fn get(&self, index: usize) -> Option<&BlockShape> {
-        self.bshapes.get(index)
+    pub fn get(&self, index: u32) -> Option<&BlockShape> {
+        self.bshapes.get(index as usize)
     }
 }
 

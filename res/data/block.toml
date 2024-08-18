@@ -1,0 +1,20 @@
+
+[[block]]
+pretty_name = "Blue Chunk"
+textures = ["blue_chunk.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "Yellow Circuit"
+textures = ["yellow_circuit.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "Blue Slope"
+textures = ["blue_chunk.png"]
+shape_name = "Slope"
+
+[[block]]
+pretty_name = "Yellow Slope"
+textures = ["yellow_circuit.png"]
+shape_name = "Slope"

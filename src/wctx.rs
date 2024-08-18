@@ -1,5 +1,6 @@
 
 use std::time::Instant;
+use std::path::PathBuf;
 
 use winit::{
     event::*,
@@ -21,8 +22,9 @@ mod texture;
 mod atlas_tex;
 
 mod block;
-
 mod rotation_group;
+
+mod data_loader;
 
 struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -45,7 +47,7 @@ struct State<'a> {
     diffuse_bind_group: wgpu::BindGroup,
     block_atlas: atlas_tex::AtlasTexture,
     mouse_pressed: bool,
-    block_registry: block::BlockRegistry<'a>,
+    block_registry: block::BlockRegistry,
     shape_registry: block::BlockShapeRegistry,
     chunk_manager: chunk::ChunkManager,
     colormap_bind_group: wgpu::BindGroup,
@@ -118,29 +120,41 @@ impl<'a> State<'a> {
 
 
 
-        let mut block_registry = block::BlockRegistry::new();
-        let mut block_atlas = atlas_tex::AtlasTexture::new(&device, &queue, wgpu::TextureFormat::R8Uint, (16, 16) );
+        //let mut block_registry = block::BlockRegistry::new();
+        //let mut block_atlas = atlas_tex::AtlasTexture::new(&device, &queue, wgpu::TextureFormat::R8Uint, (16, 16) );
 
-        let mut shape_registry = block::BlockShapeRegistry::new();
-        let cube_idx = shape_registry.add( block::make_cube_shape() );
-        let tri_idx = shape_registry.add( block::make_slope_shape() );
+        //let mut shape_registry = block::BlockShapeRegistry::new();
+        //let cube_idx = shape_registry.add( block::make_cube_shape() );
+        //let tri_idx = shape_registry.add( block::make_slope_shape() );
 
-        let pal_bytes = include_bytes!("../res/palette.png");
+        let pal_bytes = include_bytes!("../res/texture/core/palette.png");
         let pal_img = image::load_from_memory(pal_bytes).unwrap();
 
-        let cir_bytes = include_bytes!("../res/test_block_circuit.png");
-        let cir_image = image::load_from_memory(cir_bytes).unwrap();
-        let cir_texture = texture::Texture::from_image_palettize(&device, &queue, &cir_image, &pal_img, Some("../res/test_block_circuit.png")).unwrap();
+        //let cir_bytes = include_bytes!("../res/test_block_circuit.png");
+        //let cir_image = image::load_from_memory(cir_bytes).unwrap();
+        //let cir_texture = texture::Texture::from_image_palettize(&device, &queue, &cir_image, &pal_img, Some("../res/test_block_circuit.png")).unwrap();
 
-        let _ = block_registry.add( cube_idx, &"Circuit", Box::new([ block_atlas.add_texture(&cir_texture, &device, &queue).unwrap() ]) );
+        //let _ = block_registry.add( cube_idx, &"Circuit", Box::new([ block_atlas.add_texture(&cir_texture, &device, &queue).unwrap() ]) );
 
-        let blu_bytes = include_bytes!("../res/test_block_bluechunk.png");
-        let blu_image = image::load_from_memory(blu_bytes).unwrap();
-        let blu_texture = texture::Texture::from_image_palettize(&device, &queue, &blu_image, &pal_img, Some("../res/test_block_bluechunk.png")).unwrap();
-        let blu_tex_idx = block_atlas.add_texture(&blu_texture, &device, &queue).unwrap();
+        //let blu_bytes = include_bytes!("../res/test_block_bluechunk.png");
+        //let blu_image = image::load_from_memory(blu_bytes).unwrap();
+        //let blu_texture = texture::Texture::from_image_palettize(&device, &queue, &blu_image, &pal_img, Some("../res/test_block_bluechunk.png")).unwrap();
+        //let blu_tex_idx = block_atlas.add_texture(&blu_texture, &device, &queue).unwrap();
 
-        let _ = block_registry.add( cube_idx, &"Blue Chunk", Box::new([ blu_tex_idx ]) );
-        let _ = block_registry.add( tri_idx, &"Blue Chunk Slope", Box::new([ blu_tex_idx ]) );
+        //let _ = block_registry.add( cube_idx, &"Blue Chunk", Box::new([ blu_tex_idx ]) );
+        //let _ = block_registry.add( tri_idx, &"Blue Chunk Slope", Box::new([ blu_tex_idx ]) );
+
+        let mut dl = data_loader::BlockLoader::create(&device, &queue);
+        let _ = dl.submit_blockshape_direct( block::make_cube_shape(), &"CubeStatic".into() );
+        let _ = dl.submit_blockshape_direct( block::make_slope_shape(), &"Slope".into() );
+
+        let res_0 = dl.load_toml_from_file( PathBuf::from("res/data/block.toml") );
+        let res_a = dl.do_extract();
+        let res_b = dl.resolve_blocks( &device, &queue, &pal_img );
+
+        let block_registry = dl.block_registry;
+        let block_atlas = dl.texture_atlas;
+        let shape_registry = dl.shape_registry;
 
         let chunk_manager = chunk::ChunkManager::new();
 
@@ -204,7 +218,7 @@ impl<'a> State<'a> {
                 label: Some("loadonly_texture_bind_group_layout"),
             });
 
-        let colormap_bytes = include_bytes!("../res/colormap.png");
+        let colormap_bytes = include_bytes!("../res/texture/core/colormap.png");
         let colormap_tex = texture::Texture::from_bytes(&device, &queue, colormap_bytes, &"Colormap Texture").unwrap();
         let colormap_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
