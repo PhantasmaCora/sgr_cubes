@@ -10,8 +10,8 @@ use crate::wctx::block::{
     BlockShapeRegistry
 };
 
-const CHUNK_SIZE: usize = 16;
-const WORLD_CHUNKS: usize = 8;
+pub const CHUNK_SIZE: usize = 16;
+pub const WORLD_CHUNKS: usize = 8;
 
 #[derive(Copy, Clone)]
 pub struct BlockInstance {

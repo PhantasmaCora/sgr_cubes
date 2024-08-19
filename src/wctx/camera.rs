@@ -46,6 +46,13 @@ impl Camera {
             Vector3::unit_y(),
         )
     }
+
+    pub fn get_forward_vector(&self) -> Vector3<f32> {
+        let mut forward = Vector3::new(1.0, 0.0, 0.0);
+        let pitch_quat = Quaternion::from_axis_angle( Vector3::<f32>::unit_z(), self.pitch );
+        let yaw_quat = Quaternion::from_axis_angle( -1.0 * Vector3::<f32>::unit_y(), self.yaw );
+        yaw_quat * (pitch_quat * forward)
+    }
 }
 
 pub struct Projection {

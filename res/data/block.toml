@@ -1,20 +1,80 @@
 
 [[block]]
-pretty_name = "Blue Chunk"
-textures = ["blue_chunk.png"]
+pretty_name = "ST-100"
+textures = ["gray_panel.png"]
 shape_name = "CubeStatic"
 
 [[block]]
-pretty_name = "Yellow Circuit"
-textures = ["yellow_circuit.png"]
-shape_name = "CubeStatic"
-
-[[block]]
-pretty_name = "Blue Slope"
-textures = ["blue_chunk.png"]
+pretty_name = "ST-100-45s"
+textures = ["gray_panel.png"]
 shape_name = "Slope"
 
 [[block]]
-pretty_name = "Yellow Slope"
+pretty_name = "ST-101"
+textures = ["gray_plate.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "TQ-100"
+textures = ["blue_noise.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "TQ-101"
+textures = ["blue_chunk.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "TQ-101-45s"
+textures = ["blue_chunk.png", "blue_chunk.png", "blue_noise.png", "blue_noise.png", "blue_chunk.png"]
+shape_name = "Slope"
+
+[[block]]
+pretty_name = "A_Cf-256y"
 textures = ["yellow_circuit.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "A_Cf-256y-45s"
+textures = ["yellow_circuit.png", "yellow_circuit.png", "yellow_circuit_s.png", "yellow_circuit_s.png", "yellow_circuit.png"]
+shape_name = "Slope"
+
+[[block]]
+pretty_name = "SN-103_SUPRT"
+textures = ["gray_support.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "KX-103_SUPRT"
+textures = ["rusty_support.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "KvF-103_SUPRT"
+textures = ["fullrusty_support.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "TQ-103_SUPRT"
+textures = ["blue_support.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "SN-100"
+textures = ["gray_flat.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "SN-102"
+textures = ["gray_flat.png", "gray_flat.png", "gray_chunk_side.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "WARN-01"
+textures = ["caution_stripe.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "WARN-01-45s"
+textures = ["caution_stripe.png"]
 shape_name = "Slope"

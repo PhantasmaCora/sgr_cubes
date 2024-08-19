@@ -8,11 +8,14 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::WindowBuilder,
     window::Window,
+    dpi::PhysicalPosition,
 };
 
 use wgpu::util::DeviceExt;
 
 use cgmath::SquareMatrix;
+
+use grid_ray::GridRayIter3;
 
 mod camera;
 
@@ -25,6 +28,13 @@ mod block;
 mod rotation_group;
 
 mod data_loader;
+
+struct MouseOps {
+    left: bool,
+    right: bool,
+    left_just_now: bool,
+    right_just_now: bool
+}
 
 struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -46,11 +56,12 @@ struct State<'a> {
     depth_texture: texture::Texture,
     diffuse_bind_group: wgpu::BindGroup,
     block_atlas: atlas_tex::AtlasTexture,
-    mouse_pressed: bool,
+    mouse_pressed: MouseOps,
     block_registry: block::BlockRegistry,
     shape_registry: block::BlockShapeRegistry,
     chunk_manager: chunk::ChunkManager,
     colormap_bind_group: wgpu::BindGroup,
+    block_select: u16,
 }
 
 impl<'a> State<'a> {
@@ -120,29 +131,10 @@ impl<'a> State<'a> {
 
 
 
-        //let mut block_registry = block::BlockRegistry::new();
-        //let mut block_atlas = atlas_tex::AtlasTexture::new(&device, &queue, wgpu::TextureFormat::R8Uint, (16, 16) );
 
-        //let mut shape_registry = block::BlockShapeRegistry::new();
-        //let cube_idx = shape_registry.add( block::make_cube_shape() );
-        //let tri_idx = shape_registry.add( block::make_slope_shape() );
 
         let pal_bytes = include_bytes!("../res/texture/core/palette.png");
         let pal_img = image::load_from_memory(pal_bytes).unwrap();
-
-        //let cir_bytes = include_bytes!("../res/test_block_circuit.png");
-        //let cir_image = image::load_from_memory(cir_bytes).unwrap();
-        //let cir_texture = texture::Texture::from_image_palettize(&device, &queue, &cir_image, &pal_img, Some("../res/test_block_circuit.png")).unwrap();
-
-        //let _ = block_registry.add( cube_idx, &"Circuit", Box::new([ block_atlas.add_texture(&cir_texture, &device, &queue).unwrap() ]) );
-
-        //let blu_bytes = include_bytes!("../res/test_block_bluechunk.png");
-        //let blu_image = image::load_from_memory(blu_bytes).unwrap();
-        //let blu_texture = texture::Texture::from_image_palettize(&device, &queue, &blu_image, &pal_img, Some("../res/test_block_bluechunk.png")).unwrap();
-        //let blu_tex_idx = block_atlas.add_texture(&blu_texture, &device, &queue).unwrap();
-
-        //let _ = block_registry.add( cube_idx, &"Blue Chunk", Box::new([ blu_tex_idx ]) );
-        //let _ = block_registry.add( tri_idx, &"Blue Chunk Slope", Box::new([ blu_tex_idx ]) );
 
         let mut dl = data_loader::BlockLoader::create(&device, &queue);
         let _ = dl.submit_blockshape_direct( block::make_cube_shape(), &"CubeStatic".into() );
@@ -241,9 +233,9 @@ impl<'a> State<'a> {
 
 
 
-        let camera = camera::Camera::new((8.0, 17.8, -1.0), cgmath::Deg(90.0), cgmath::Deg(-20.0));
+        let camera = camera::Camera::new((63.0, 35.0, 62.0), cgmath::Deg(90.0), cgmath::Deg(-20.0));
         let projection = camera::Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
-        let camera_controller = camera::CameraController::new(4.0, 0.4);
+        let camera_controller = camera::CameraController::new(7.0, 0.37);
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&camera, &projection);
@@ -367,6 +359,9 @@ impl<'a> State<'a> {
         );
         let num_indices = INDICES.len() as u32;
 
+        let mouse_pressed = MouseOps{left: false, right: false, left_just_now: false, right_just_now: false };
+        let block_select = 1;
+
         Self {
             surface,
             device,
@@ -390,8 +385,9 @@ impl<'a> State<'a> {
             block_registry,
             shape_registry,
             chunk_manager,
-            mouse_pressed: false,
+            mouse_pressed,
             colormap_bind_group,
+            block_select,
         }
     }
 
@@ -424,7 +420,13 @@ impl<'a> State<'a> {
                 ..
             } => self.camera_controller.process_keyboard(*key, *state),
             WindowEvent::MouseWheel { delta, .. } => {
-                self.camera_controller.process_scroll(delta);
+                //self.camera_controller.process_scroll(delta);
+                let shift = match delta {
+                    MouseScrollDelta::LineDelta(_, scroll) => -scroll * 0.5,
+                    MouseScrollDelta::PixelDelta(PhysicalPosition { y: scroll, .. }) => -*scroll as f32,
+                };
+                let shift_i = ( shift * -2.0 ) as i32;
+                self.block_select = ( ( self.block_select as i32 + shift_i - 1 ) % (self.block_registry.get_num_blocks() as i32 - 2) + 1 ) as u16;
                 true
             }
             WindowEvent::MouseInput {
@@ -432,7 +434,17 @@ impl<'a> State<'a> {
                 state,
                 ..
             } => {
-                self.mouse_pressed = *state == ElementState::Pressed;
+                self.mouse_pressed.left = *state == ElementState::Pressed;
+                self.mouse_pressed.left_just_now = self.mouse_pressed.left;
+                true
+            }
+            WindowEvent::MouseInput {
+                button: MouseButton::Right,
+                state,
+                ..
+            } => {
+                self.mouse_pressed.right = *state == ElementState::Pressed;
+                self.mouse_pressed.right_just_now = self.mouse_pressed.right;
                 true
             }
             _ => false,
@@ -447,6 +459,51 @@ impl<'a> State<'a> {
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
+
+        // do block breaking and placing
+        if self.mouse_pressed.left_just_now || self.mouse_pressed.right_just_now {
+            let mut last = grid_ray::ilattice::glam::IVec3::NEG_ONE;
+            let mut current = grid_ray::ilattice::glam::IVec3::NEG_ONE;
+            let dir = self.camera.get_forward_vector();
+            let mut ray_iter = GridRayIter3::new(
+                grid_ray::ilattice::glam::Vec3A::new( self.camera.position.x, self.camera.position.y, self.camera.position.z ), // start position
+                grid_ray::ilattice::glam::Vec3A::new( dir.x, dir.y, dir.z )
+            );
+
+            let mut run = true;
+            let mut hit = false;
+            while run {
+                let next = ray_iter.next().unwrap();
+                if next.0 > 5.0 { run = false; }
+                last = current;
+                current = next.1;
+                if current.x >= 0 && current.y >= 0 && current.z >= 0 &&
+                current.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 {
+                    let bdef = self.chunk_manager.get_block( ( current.x as usize, current.y as usize, current.z as usize ) ).blockdef;
+                    if bdef != 0 {
+                        run = false;
+                        hit = true;
+                    }
+                }
+            }
+
+            if hit && self.mouse_pressed.left_just_now {
+                let mut broken = self.chunk_manager.get_mut_block( ( current.x as usize, current.y as usize, current.z as usize ) );
+                broken.blockdef = 0;
+                broken.exparam = 0;
+            } else if hit && self.mouse_pressed.right_just_now {
+                let mut placed = self.chunk_manager.get_mut_block( ( last.x as usize, last.y as usize, last.z as usize ) );
+                placed.blockdef = self.block_select;
+                placed.exparam = 0;
+            }
+        }
+
+        {
+            self.chunk_manager.update_dirty_chunks( &self.block_registry, &self.shape_registry );
+        }
+
+        self.mouse_pressed.left_just_now = false;
+        self.mouse_pressed.right_just_now = false;
     }
 
     fn change_buffers(&mut self, vsource: &[Vertex], isource: &[u16]) {
@@ -631,11 +688,11 @@ pub async fn run() {
     let mut state = State::new(&window).await;
     let mut last_render_time = Instant::now();
 
-    //window
-    //.set_cursor_grab(winit::window::CursorGrabMode::Confined)
-    //.or_else(|_e| window.set_cursor_grab(winit::window::CursorGrabMode::Locked))
-    //.unwrap();
-    //window.set_cursor_visible(false);
+    window
+    .set_cursor_grab(winit::window::CursorGrabMode::Confined)
+    .or_else(|_e| window.set_cursor_grab(winit::window::CursorGrabMode::Locked))
+    .unwrap();
+    window.set_cursor_visible(false);
 
     {
         let bi = state.chunk_manager.get_mut_block( ( 63, 31, 63 ) );
@@ -648,22 +705,21 @@ pub async fn run() {
         state.chunk_manager.update_dirty_chunks( &state.block_registry, &state.shape_registry );
     }
 
-    let mut last_update = Instant::now();
+    //let mut last_update = Instant::now();
 
     let _ = event_loop.run(move |event, control_flow| {
         match event {
             Event::DeviceEvent {
                 event: DeviceEvent::MouseMotion{ delta, },
                 .. // We're not using device_id currently
-            } => if state.mouse_pressed {
+            } => {
                 state.camera_controller.process_mouse(delta.0, delta.1)
             }
             Event::WindowEvent {
                 ref event,
                 window_id,
-            } if window_id == state.window().id() => if !state.input(event) { // UPDATED!
+            } if window_id == state.window().id() => if !state.input(event) {
                 match event {
-
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {
                         event:
@@ -676,6 +732,17 @@ pub async fn run() {
                     } => control_flow.exit(),
                     WindowEvent::Resized(physical_size) => {
                         state.resize(*physical_size);
+                    }
+                    WindowEvent::Focused(has) => {
+                        if *has {
+                            let _ = state.window
+                            .set_cursor_grab(winit::window::CursorGrabMode::Confined)
+                            .or_else(|_e| state.window.set_cursor_grab(winit::window::CursorGrabMode::Locked));
+                            state.window.set_cursor_visible(false);
+                        } else {
+                            let _ = state.window.set_cursor_grab(winit::window::CursorGrabMode::None);
+                            state.window.set_cursor_visible(true);
+                        }
                     }
                     WindowEvent::RedrawRequested if window_id == state.window().id() => {
                         let now = Instant::now();
@@ -697,18 +764,6 @@ pub async fn run() {
                 }
             }
             Event::AboutToWait => {
-                let ins = Instant::now();
-                if ins.duration_since(last_update) > std::time::Duration::new(4, 0) {
-                    last_update = ins;
-                    {
-                        let bi_2 = state.chunk_manager.get_mut_block( ( 64, 32, 63 ) );
-                        bi_2.exparam = ( bi_2.exparam + 1 ) % 12;
-                    }
-
-                    {
-                        state.chunk_manager.update_dirty_chunks( &state.block_registry, &state.shape_registry );
-                    }
-                }
 
                 // RedrawRequested will only trigger once unless we manually
                 // request it.

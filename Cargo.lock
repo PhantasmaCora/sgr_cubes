@@ -210,6 +210,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
+name = "bytecheck"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41502630fe304ce54cbb2f8389e017784dee2b0328147779fcbe43b9db06d35d"
+dependencies = [
+ "bytecheck_derive",
+ "ptr_meta",
+ "simdutf8",
+]
+
+[[package]]
+name = "bytecheck_derive"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eda88c587085bc07dc201ab9df871bd9baa5e07f7754b745e4d7194b43ac1eda"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "bytemuck"
 version = "1.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -600,6 +622,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam"
+version = "0.24.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5418c17512bdf42730f9032c74e1ae39afc408745ebb2acf72fbc4691c17945"
+
+[[package]]
+name = "glam"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "151665d9be52f9bb40fc7966565d39666f2d1e69233571b71b87791c7e0528b3"
+
+[[package]]
+name = "glam"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "779ae4bf7e8421cf91c0b3b64e7e8b40b862fba4d393f59150042de7c4965a94"
+
+[[package]]
 name = "glob"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -679,6 +719,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "grid-ray"
+version = "0.1.0"
+source = "git+https://github.com/bonsairobo/ilattice-rs/#8b0af3dcf6686a88bf87599a3a8ca2f0ca6ad4b1"
+dependencies = [
+ "ilattice 0.4.0 (git+https://github.com/bonsairobo/ilattice-rs/)",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -736,6 +784,24 @@ dependencies = [
  "block2",
  "dispatch",
  "objc2",
+]
+
+[[package]]
+name = "ilattice"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "142c38a1c9ad4feaba850b1224875523ab8167ccf767ad26ce023e5e5467379b"
+dependencies = [
+ "glam 0.24.2",
+]
+
+[[package]]
+name = "ilattice"
+version = "0.4.0"
+source = "git+https://github.com/bonsairobo/ilattice-rs/#8b0af3dcf6686a88bf87599a3a8ca2f0ca6ad4b1"
+dependencies = [
+ "bytecheck",
+ "glam 0.25.0",
 ]
 
 [[package]]
@@ -1293,6 +1359,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43d84d1d7a6ac92673717f9f6d1518374ef257669c24ebc5ac25d5033828be58"
 
 [[package]]
+name = "ptr_meta"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0738ccf7ea06b608c10564b31debd4f5bc5e197fc8bfe088f68ae5ce81e7a4f1"
+dependencies = [
+ "ptr_meta_derive",
+]
+
+[[package]]
+name = "ptr_meta_derive"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16b845dbfca988fa33db069c0e230574d15a3088f147a87b64c7589eb662c9ac"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1488,7 +1574,10 @@ dependencies = [
  "env_logger",
  "figment",
  "fs_extra",
+ "glam 0.28.0",
  "glob",
+ "grid-ray",
+ "ilattice 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "image",
  "log",
  "ndarray",
@@ -1505,6 +1594,12 @@ name = "simd-adler32"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
+
+[[package]]
+name = "simdutf8"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f27f6278552951f1f2b8cf9da965d10969b2efdea95a6ec47987ab46edfe263a"
 
 [[package]]
 name = "slab"

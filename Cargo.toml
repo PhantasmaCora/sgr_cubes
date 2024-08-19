@@ -19,6 +19,9 @@ num = "0.4.3"
 figment = { version = "0.10.19", features = ["toml"] }
 serde = { version = "1.0.208", features = ["std", "derive", "serde_derive"] }
 toml = "0.8.19"
+ilattice = "0.4.0"
+grid-ray = { git = "https://github.com/bonsairobo/ilattice-rs/" }
+glam = "0.28.0"
 
 [dependencies.image]
 version = "0.24"

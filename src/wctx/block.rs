@@ -41,6 +41,10 @@ impl BlockRegistry {
     pub fn get(&self, index: u16) -> Option<&Block> {
         self.blocks.get(index as usize)
     }
+
+    pub fn get_num_blocks(&self) -> u16 {
+        return self.blocks.len() as u16;
+    }
 }
 
 pub struct BlockShape {
