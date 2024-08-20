@@ -58,6 +58,7 @@ pub fn num_to_rf(num: u8) -> Option<RotFace> {
     }
 }
 
+
 pub fn rf_to_num(rf: RotFace) -> u8 {
     match rf {
         RotFace::PlusZ => 0,

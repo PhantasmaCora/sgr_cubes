@@ -1,6 +1,10 @@
 
 use std::cmp::min;
 
+use cgmath::{
+    Quaternion,
+    Rotation,
+};
 
 use crate::wctx::rotation_group;
 use crate::wctx::rotation_group::RotFace;
@@ -14,6 +18,7 @@ pub struct Block {
     //parameter_type: ParamType,
     pub textures: Vec<u32>,
     pub pretty_name: String,
+    pub transparent: bool,
 }
 
 pub struct BlockRegistry {
@@ -23,7 +28,7 @@ pub struct BlockRegistry {
 impl BlockRegistry {
     pub fn new() -> BlockRegistry {
         // Always create the air block at position zero!
-        let air = Block { registry_id: 0, shape_id: 0, pretty_name: "Air".into(), textures: vec![0] };
+        let air = Block { registry_id: 0, shape_id: 0, pretty_name: "Air".into(), transparent: true, textures: vec![0] };
         let mut blocks = Vec::<Block>::new();
         blocks.push(air);
 
@@ -32,9 +37,9 @@ impl BlockRegistry {
         }
     }
 
-    pub fn add(&mut self, shape_id: u32, pretty_name: String, textures: Vec<u32> ) -> u16 {
+    pub fn add(&mut self, shape_id: u32, pretty_name: String, textures: Vec<u32>, transparent: bool ) -> u16 {
         let registry_id = self.blocks.len() as u16;
-        self.blocks.push( Block { registry_id, shape_id, pretty_name, textures } );
+        self.blocks.push( Block { registry_id, shape_id, pretty_name, textures, transparent } );
         registry_id
     }
 
@@ -48,13 +53,13 @@ impl BlockRegistry {
 }
 
 pub struct BlockShape {
-    faces: Box<[FaceDef]>,
+    faces: Vec<FaceDef>,
     obstructs: [bool; 6],
     rot_group: rotation_group::RotType
 }
 
 impl BlockShape {
-    pub fn generate_draw_buffers(&self, vertex_buffer: &mut Vec<super::Vertex>, index_buffer: &mut Vec<u16>, blockdef: &Block, exparam: u8, chunk_view: &ndarray::Array3<super::chunk::BlockInstance>, world_pos: (usize, usize, usize), pos: (usize, usize, usize) ) {
+    pub fn generate_draw_buffers(&self, vertex_buffer: &mut Vec<super::Vertex>, index_buffer: &mut Vec<u16>, blockdef: &Block, exparam: u8, bdc: crate::wctx::chunk::BlockDrawContext, world_pos: (usize, usize, usize), pos: (usize, usize, usize) ) {
         let mut quat = cgmath::Quaternion::<f32>::one();
         match self.rot_group {
             rotation_group::RotType::RotFace => {
@@ -75,13 +80,8 @@ impl BlockShape {
 
             // check whether there's an obstruction here
             if let Some(obstruct) = face.obstructed_by {
-                let mut other_pos = cgmath::Vector3::<i32>::new( pos.0 as i32, pos.1 as i32, pos.2 as i32 );
-                other_pos += rotation_group::rf_to_vector( rotation_group::rotate_rf(obstruct, &quat).unwrap() ).cast::<i32>().unwrap();
-                if other_pos.x >= 0 && other_pos.x < chunk_view.len_of(ndarray::Axis(0)) as i32 && other_pos.y >= 0 && other_pos.y < chunk_view.len_of(ndarray::Axis(1)) as i32 && other_pos.z >= 0 && other_pos.z < chunk_view.len_of(ndarray::Axis(2)) as i32 {
-                    let b2 = &chunk_view[ [other_pos.x as usize, other_pos.y as usize, other_pos.z as usize] ];
-                    if b2.blockdef != 0 {
-                        continue;
-                    }
+                if bdc.obstructions[ rotation_group::rf_to_num( rotation_group::rotate_rf(obstruct, &quat).unwrap() ) as usize ] {
+                    continue;
                 }
             }
 
@@ -102,12 +102,30 @@ impl BlockShape {
 
     }
 
+    pub fn does_obstruct(&self, exparam: u8, dir: rotation_group::RotFace) -> bool {
+        let mut quat = cgmath::Quaternion::<f32>::one();
+        match self.rot_group {
+            rotation_group::RotType::RotFace => {
+                quat = rotation_group::generate_quat_from_rf( rotation_group::num_to_rf( exparam & 0b0000_0111 ).unwrap() );
+            },
+            rotation_group::RotType::RotVert => {
+                quat = rotation_group::generate_quat_from_rv( rotation_group::num_to_rv( exparam & 0b0000_0111 ).unwrap() );
+            },
+            rotation_group::RotType::RotEdge => {
+                quat = rotation_group::generate_quat_from_re( rotation_group::num_to_re( exparam & 0b0000_1111 ).unwrap() );
+            },
+            rotation_group::RotType::Static => {},
+            _ => {}
+        }
+        self.obstructs[ rotation_group::rf_to_num( rotation_group::vector_to_rf( quat.invert() * rotation_group::rf_to_vector(dir) ).expect("Error! failed to convert vector to rf") ) as usize ]
+    }
+
 }
 
 pub struct FaceDef {
     pub obstructed_by: Option<RotFace>,
-    pub vertices: Box<[ [f32; 5] ]>,
-    pub indices: Box<[u32]>
+    pub vertices: Vec< [f32; 5] >,
+    pub indices: Vec<u32>
 }
 
 pub struct BlockShapeRegistry {
@@ -134,14 +152,14 @@ impl BlockShapeRegistry {
 
 pub fn make_cube_shape() -> BlockShape {
     BlockShape {
-        faces: Box::new([
-            FaceDef{ obstructed_by: Some(RotFace::PlusY), vertices: Box::new([ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, 0.5, 0.5, 0.0, 1.0 ], [ 0.5, 0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 2, 1, 1, 2, 3 ]) },
-            FaceDef{ obstructed_by: Some(RotFace::MinusY), vertices: Box::new([ [ -0.5, -0.5, -0.5, 0.0, 0.0 ], [ 0.5, -0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 1, 2, 1, 3, 2 ]) },
-            FaceDef{ obstructed_by: Some(RotFace::PlusZ), vertices: Box::new([ [ -0.5, 0.5, 0.5, 0.0, 0.0 ], [ 0.5, 0.5, 0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 2, 1, 1, 2, 3 ]) },
-            FaceDef{ obstructed_by: Some(RotFace::MinusZ), vertices: Box::new([ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ -0.5, 0.5, -0.5, 1.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ -0.5, -0.5, -0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 2, 1, 1, 2, 3 ]) },
-            FaceDef{ obstructed_by: Some(RotFace::PlusX), vertices: Box::new([ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, 0.5, 0.5, 1.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 1, 2, 1, 3, 2 ]) },
-            FaceDef{ obstructed_by: Some(RotFace::MinusX), vertices: Box::new([ [ -0.5, 0.5, 0.5, 0.0, 0.0 ], [ -0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ -0.5, -0.5, -0.5, 1.0, 1.0 ] ]) , indices: Box::new([ 0, 1, 2, 1, 3, 2 ]) },
-        ]),
+        faces: vec![
+            FaceDef{ obstructed_by: Some(RotFace::PlusY), vertices: vec![ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, 0.5, 0.5, 0.0, 1.0 ], [ 0.5, 0.5, 0.5, 1.0, 1.0 ] ], indices: vec![ 0, 2, 1, 1, 2, 3 ] },
+            FaceDef{ obstructed_by: Some(RotFace::MinusY), vertices: vec![ [ -0.5, -0.5, -0.5, 0.0, 0.0 ], [ 0.5, -0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ], indices: vec![ 0, 1, 2, 1, 3, 2 ] },
+            FaceDef{ obstructed_by: Some(RotFace::PlusZ), vertices: vec![ [ -0.5, 0.5, 0.5, 0.0, 0.0 ], [ 0.5, 0.5, 0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ], indices: vec![ 0, 2, 1, 1, 2, 3 ] },
+            FaceDef{ obstructed_by: Some(RotFace::MinusZ), vertices: vec![ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ -0.5, 0.5, -0.5, 1.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ -0.5, -0.5, -0.5, 1.0, 1.0 ] ], indices: vec![ 0, 2, 1, 1, 2, 3 ] },
+            FaceDef{ obstructed_by: Some(RotFace::PlusX), vertices: vec![ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, 0.5, 0.5, 1.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ], indices: vec![ 0, 1, 2, 1, 3, 2 ] },
+            FaceDef{ obstructed_by: Some(RotFace::MinusX), vertices: vec![ [ -0.5, 0.5, 0.5, 0.0, 0.0 ], [ -0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ -0.5, -0.5, -0.5, 1.0, 1.0 ] ] , indices: vec![ 0, 1, 2, 1, 3, 2 ] },
+        ],
         obstructs: [true; 6],
         rot_group: rotation_group::RotType::Static
     }
@@ -149,14 +167,14 @@ pub fn make_cube_shape() -> BlockShape {
 
 pub fn make_slope_shape() -> BlockShape {
     BlockShape {
-        faces: Box::new([
-            FaceDef{ obstructed_by: Some(RotFace::MinusY), vertices: Box::new([ [ -0.5, -0.5, -0.5, 0.0, 0.0 ], [ 0.5, -0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 1, 2, 1, 3, 2 ]) }, // minus Y cube face
-            FaceDef{ obstructed_by: Some(RotFace::MinusZ), vertices: Box::new([ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ -0.5, 0.5, -0.5, 1.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ -0.5, -0.5, -0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 2, 1, 1, 2, 3 ]) }, // minus Z cube face
-            FaceDef{ obstructed_by: Some(RotFace::PlusX), vertices: Box::new([ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 2, 1]) }, // plus X tri face
-            FaceDef{ obstructed_by: Some(RotFace::MinusX), vertices: Box::new([ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ -0.5, -0.5, -0.5, 0.0, 1.0 ], [ -0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 1, 2]) }, // minus X tri face
-            FaceDef{ obstructed_by: None, vertices: Box::new([ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ]), indices: Box::new([ 0, 2, 1, 1, 2, 3 ]) },
-        ]),
-        obstructs: [ false, true, false, false, false, true ],
+        faces: vec![
+            FaceDef{ obstructed_by: Some(RotFace::MinusY), vertices: vec![ [ -0.5, -0.5, -0.5, 0.0, 0.0 ], [ 0.5, -0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ], indices: vec![ 0, 1, 2, 1, 3, 2 ] }, // minus Y cube face
+            FaceDef{ obstructed_by: Some(RotFace::MinusZ), vertices: vec![ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ -0.5, 0.5, -0.5, 1.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ -0.5, -0.5, -0.5, 1.0, 1.0 ] ], indices: vec![ 0, 2, 1, 1, 2, 3 ] }, // minus Z cube face
+            FaceDef{ obstructed_by: Some(RotFace::PlusX), vertices: vec![ [ 0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, -0.5, -0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ], indices: vec![ 0, 2, 1] }, // plus X tri face
+            FaceDef{ obstructed_by: Some(RotFace::MinusX), vertices: vec![ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ -0.5, -0.5, -0.5, 0.0, 1.0 ], [ -0.5, -0.5, 0.5, 1.0, 1.0 ] ], indices: vec![ 0, 1, 2] }, // minus X tri face
+            FaceDef{ obstructed_by: None, vertices: vec![ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ], indices: vec![ 0, 2, 1, 1, 2, 3 ] },
+        ],
+        obstructs: [ false, true, false, true, false, false ],
         rot_group: rotation_group::RotType::RotEdge
     }
 }

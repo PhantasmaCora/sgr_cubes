@@ -22,6 +22,7 @@ pub struct BlockPlan {
     pretty_name: String,
     textures: Vec<String>,
     shape_name: String,
+    transparent: Option<bool>,
 }
 
 pub struct BlockLoader {
@@ -88,7 +89,13 @@ impl BlockLoader {
             } ).collect();
             let shape_idx = self.shape_names.get( &bp.shape_name ).ok_or(Error::new::<String>(std::io::ErrorKind::Other, "Shape name not found!".into() ))?;
             let pretty_name = bp.pretty_name.clone();
-            self.block_registry.add( *shape_idx, pretty_name, tex_indices );
+
+            let transparent = match bp.transparent {
+                Some(value) => value,
+                None => false
+            };
+
+            self.block_registry.add( *shape_idx, pretty_name, tex_indices, transparent );
         }
 
         Ok(())
