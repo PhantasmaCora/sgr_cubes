@@ -1,5 +1,5 @@
 
-use std::time::Instant;
+use std::time::{Instant, Duration};
 use std::path::PathBuf;
 
 use winit::{
@@ -62,6 +62,11 @@ struct State<'a> {
     chunk_manager: chunk::ChunkManager,
     colormap_bind_group: wgpu::BindGroup,
     block_select: u16,
+    selector_pipeline: wgpu::RenderPipeline,
+    selector_bind_group: wgpu::BindGroup,
+    selected_block: Option<(usize, usize, usize)>,
+    select_timer: u16,
+    last_qsecond: Instant,
 }
 
 impl<'a> State<'a> {
@@ -342,6 +347,89 @@ impl<'a> State<'a> {
             cache: None,
         });
 
+
+
+
+
+
+
+        let sel_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Selected Block Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("selected_block_shader.wgsl").into()),
+        });
+
+        let sel_render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Selected Block Marker Pipeline Layout"),
+            bind_group_layouts: &[
+                &camera_bind_group_layout,
+                &loadonly_texture_bind_group_layout,
+            ],
+            push_constant_ranges: &[],
+        });
+
+        let selector_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Selected Block Marker Pipeline"),
+            layout: Some(&sel_render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &sel_shader,
+                entry_point: "vs_main",
+                buffers: &[
+                    Vertex::desc(),
+                ],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &sel_shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: wgpu::PolygonMode::Fill,
+                // Requires Features::DEPTH_CLIP_CONTROL
+                unclipped_depth: false,
+                // Requires Features::CONSERVATIVE_RASTERIZATION
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
+        let selector_bytes = include_bytes!("../res/texture/core/selector.png");
+        let selector_tex = texture::Texture::from_bytes(&device, &queue, selector_bytes, &"Selector Texture").unwrap();
+        let selector_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &loadonly_texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&selector_tex.view),
+                    }
+                ],
+                label: Some("selector_bind_group"),
+            }
+        );
+
+
+
+
+
         let vertex_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
@@ -388,6 +476,11 @@ impl<'a> State<'a> {
             mouse_pressed,
             colormap_bind_group,
             block_select,
+            selector_pipeline,
+            selector_bind_group,
+            selected_block: None,
+            select_timer: 0,
+            last_qsecond: Instant::now(),
         }
     }
 
@@ -426,7 +519,15 @@ impl<'a> State<'a> {
                     MouseScrollDelta::PixelDelta(PhysicalPosition { y: scroll, .. }) => -*scroll as f32,
                 };
                 let shift_i = ( shift * -2.0 ) as i32;
-                self.block_select = ( ( self.block_select as i32 + shift_i - 1 ) % (self.block_registry.get_num_blocks() as i32 - 2) + 1 ) as u16;
+                let t_select = self.block_select as i32 + shift_i;
+                self.block_select = if t_select <= 0 {
+                    self.block_registry.get_num_blocks() - 1
+                } else if t_select >= self.block_registry.get_num_blocks() as i32 {
+                    1 as u16
+                } else {
+                    t_select as u16
+                };
+
                 true
             }
             WindowEvent::MouseInput {
@@ -461,45 +562,57 @@ impl<'a> State<'a> {
         );
 
         // do block breaking and placing
-        if self.mouse_pressed.left_just_now || self.mouse_pressed.right_just_now {
-            let mut last = grid_ray::ilattice::glam::IVec3::NEG_ONE;
-            let mut current = grid_ray::ilattice::glam::IVec3::NEG_ONE;
-            let dir = self.camera.get_forward_vector();
-            let mut ray_iter = GridRayIter3::new(
-                grid_ray::ilattice::glam::Vec3A::new( self.camera.position.x, self.camera.position.y, self.camera.position.z ), // start position
-                grid_ray::ilattice::glam::Vec3A::new( dir.x, dir.y, dir.z )
-            );
+        let mut last = grid_ray::ilattice::glam::IVec3::NEG_ONE;
+        let mut current = grid_ray::ilattice::glam::IVec3::NEG_ONE;
+        let dir = self.camera.get_forward_vector();
+        let mut ray_iter = GridRayIter3::new(
+            grid_ray::ilattice::glam::Vec3A::new( self.camera.position.x, self.camera.position.y, self.camera.position.z ), // start position
+            grid_ray::ilattice::glam::Vec3A::new( dir.x, dir.y, dir.z )
+        );
 
-            let mut run = true;
-            let mut hit = false;
-            while run {
-                let next = ray_iter.next().unwrap();
-                if next.0 > 5.0 { run = false; }
-                last = current;
-                current = next.1;
-                if current.x >= 0 && current.y >= 0 && current.z >= 0 &&
-                current.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 {
-                    let bdef = self.chunk_manager.get_block( ( current.x as usize, current.y as usize, current.z as usize ) ).blockdef;
-                    if bdef != 0 {
-                        run = false;
-                        hit = true;
-                    }
+        let mut run = true;
+        let mut hit = false;
+        while run {
+            let next = ray_iter.next().unwrap();
+            if next.0 > 5.0 { run = false; }
+            last = current;
+            current = next.1;
+            if current.x >= 0 && current.y >= 0 && current.z >= 0 &&
+            current.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 {
+                let bdef = self.chunk_manager.get_block( ( current.x as usize, current.y as usize, current.z as usize ) ).blockdef;
+                if bdef != 0 {
+                    run = false;
+                    hit = true;
                 }
             }
-
-            if hit && self.mouse_pressed.left_just_now {
-                let mut broken = self.chunk_manager.get_mut_block( ( current.x as usize, current.y as usize, current.z as usize ) );
-                broken.blockdef = 0;
-                broken.exparam = 0;
-            } else if hit && self.mouse_pressed.right_just_now {
-                let mut placed = self.chunk_manager.get_mut_block( ( last.x as usize, last.y as usize, last.z as usize ) );
-                placed.blockdef = self.block_select;
-                placed.exparam = 0;
-            }
         }
+        if hit {
+            self.selected_block = Some( ( current.x as usize, current.y as usize, current.z as usize ) );
+        } else {
+            self.selected_block = None;
+        }
+
+        if hit && self.mouse_pressed.left_just_now {
+            let mut broken = self.chunk_manager.get_mut_block( ( current.x as usize, current.y as usize, current.z as usize ) );
+            broken.blockdef = 0;
+            broken.exparam = 0;
+        } else if hit && self.mouse_pressed.right_just_now && (last.x >= 0 && last.y >= 0 && last.z >= 0 &&
+            last.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && last.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && last.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32) {
+            let mut placed = self.chunk_manager.get_mut_block( ( last.x as usize, last.y as usize, last.z as usize ) );
+            placed.blockdef = self.block_select;
+            placed.exparam = 0;
+        }
+
 
         {
             self.chunk_manager.update_dirty_chunks( &self.block_registry, &self.shape_registry );
+        }
+
+        let now = Instant::now();
+        if now.duration_since(self.last_qsecond) >= Duration::new(0, 250_000_000) {
+            self.last_qsecond = now;
+            self.select_timer += 1;
+            self.select_timer %= 13;
         }
 
         self.mouse_pressed.left_just_now = false;
@@ -591,6 +704,94 @@ impl<'a> State<'a> {
             render_pass.draw_indexed(0..num_indices, 0, 0..1);
 
         }
+
+        // draw the marker for the selected block!
+        if let Some(pos) = self.selected_block {
+            let sel_vertices = vec![
+                Vertex { position: [ pos.0 as f32, pos.1 as f32, pos.2 as f32 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 }, // -Z
+                Vertex { position: [ pos.0 as f32, pos.1 as f32 + 1.0, pos.2 as f32 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32, pos.2 as f32 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32 + 1.0, pos.2 as f32 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+
+                Vertex { position: [ pos.0 as f32, pos.1 as f32, pos.2 as f32 + 1.0 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 }, // +Z
+                Vertex { position: [ pos.0 as f32, pos.1 as f32 + 1.0, pos.2 as f32 + 1.0 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32, pos.2 as f32 + 1.0 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32 + 1.0, pos.2 as f32 + 1.0 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+
+                Vertex { position: [ pos.0 as f32, pos.1 as f32, pos.2 as f32 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 }, // -X
+                Vertex { position: [ pos.0 as f32, pos.1 as f32 + 1.0, pos.2 as f32 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32, pos.1 as f32, pos.2 as f32 + 1.0 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32, pos.1 as f32 + 1.0, pos.2 as f32 + 1.0 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32, pos.2 as f32 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 }, // +X
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32 + 1.0, pos.2 as f32 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32, pos.2 as f32 + 1.0 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32 + 1.0, pos.2 as f32 + 1.0 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32, pos.2 as f32 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 }, // -Y
+                Vertex { position: [ pos.0 as f32, pos.1 as f32, pos.2 as f32 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32, pos.2 as f32 + 1.0 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32, pos.1 as f32, pos.2 as f32 + 1.0 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32 + 1.0, pos.2 as f32 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 }, // +Y
+                Vertex { position: [ pos.0 as f32, pos.1 as f32 + 1.0, pos.2 as f32 ], uv: [( 1.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32 + 1.0, pos.1 as f32 + 1.0, pos.2 as f32 + 1.0 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 1.0], array_index: 0, light: 0.0 },
+                Vertex { position: [ pos.0 as f32, pos.1 as f32 + 1.0, pos.2 as f32 + 1.0 ], uv: [( 0.0 + self.select_timer as f32 ) / 13.0, 0.0], array_index: 0, light: 0.0 },
+            ];
+            let sel_indices: Vec<u16> = vec![
+                0, 1, 2,
+                1, 3, 2,
+                4, 6, 5,
+                5, 6, 7,
+                8, 10, 9,
+                9, 10, 11,
+                12, 13, 14,
+                13, 15, 14,
+                16, 18, 17,
+                17, 18, 19,
+                20, 21, 22,
+                21, 23, 22
+            ];
+
+            let vertex_buffer = self.device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&sel_vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                }
+            );
+            let index_buffer = self.device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: bytemuck::cast_slice(&sel_indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                }
+            );
+            let num_indices = sel_indices.len() as u32;
+
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+
+            render_pass.set_pipeline(&self.selector_pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.selector_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..num_indices, 0, 0..1);
+        }
+
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();

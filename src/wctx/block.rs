@@ -2,7 +2,6 @@
 use std::cmp::min;
 
 use cgmath::{
-    Quaternion,
     Rotation,
 };
 
