@@ -1,17 +1,27 @@
 
 [[block]]
 pretty_name = "ST-100"
-textures = ["gray_panel.png"]
+textures = ["steelgray_panel.png"]
 shape_name = "CubeStatic"
 
 [[block]]
 pretty_name = "ST-100-45s"
-textures = ["gray_panel.png"]
+textures = ["steelgray_panel.png"]
 shape_name = "Slope"
 
 [[block]]
 pretty_name = "ST-101"
-textures = ["gray_plate.png"]
+textures = ["steelgray_plate.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "ST-102"
+textures = ["steelgray_panel.png", "steelgray_panel.png", "steelgray_slabs.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "ST-103_SUPRT"
+textures = ["steelgray_support.png"]
 shape_name = "CubeStatic"
 
 [[block]]
@@ -30,6 +40,11 @@ textures = ["blue_chunk.png", "blue_chunk.png", "blue_noise.png", "blue_noise.pn
 shape_name = "Slope"
 
 [[block]]
+pretty_name = "TQ-103_SUPRT"
+textures = ["blue_support.png"]
+shape_name = "CubeStatic"
+
+[[block]]
 pretty_name = "A_Cf-256y"
 textures = ["yellow_circuit.png"]
 shape_name = "CubeStatic"
@@ -40,13 +55,38 @@ textures = ["yellow_circuit.png", "yellow_circuit.png", "yellow_circuit_s.png", 
 shape_name = "Slope"
 
 [[block]]
-pretty_name = "SN-103_SUPRT"
-textures = ["gray_support.png"]
+pretty_name = "A_Cf-64y"
+textures = ["yellow_circuit_dark.png"]
 shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "A_Cf-64y-45s"
+textures = ["yellow_circuit_dark.png", "yellow_circuit_dark.png", "yellow_circuit_dark_s.png", "yellow_circuit_dark_s.png", "yellow_circuit_dark.png"]
+shape_name = "Slope"
 
 [[block]]
 pretty_name = "KX-103_SUPRT"
 textures = ["rusty_support.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "KvF-100"
+textures = ["fullrusty_flat.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "KvF-101"
+textures = ["fullrusty_chunk.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "KvF-101-45s"
+textures = ["fullrusty_chunk.png", "fullrusty_chunk.png", "fullrusty_flat.png", "fullrusty_flat.png", "fullrusty_chunk.png"]
+shape_name = "Slope"
+
+[[block]]
+pretty_name = "KvF-102"
+textures = ["fullrusty_chunk.png", "fullrusty_chunk.png", "fullrusty_anchor.png"]
 shape_name = "CubeStatic"
 
 [[block]]
@@ -55,18 +95,48 @@ textures = ["fullrusty_support.png"]
 shape_name = "CubeStatic"
 
 [[block]]
-pretty_name = "TQ-103_SUPRT"
-textures = ["blue_support.png"]
-shape_name = "CubeStatic"
-
-[[block]]
 pretty_name = "SN-100"
 textures = ["gray_flat.png"]
 shape_name = "CubeStatic"
 
 [[block]]
+pretty_name = "SN-101"
+textures = ["gray_chunk.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "SN-101-45s"
+textures = ["gray_chunk.png", "gray_chunk.png", "gray_flat.png", "gray_flat.png", "gray_chunk.png"]
+shape_name = "Slope"
+
+[[block]]
 pretty_name = "SN-102"
 textures = ["gray_flat.png", "gray_flat.png", "gray_chunk_side.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "SN-103_SUPRT"
+textures = ["gray_support.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "FC-100"
+textures = ["redbrown_flat.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "FC-101"
+textures = ["redbrown_chunk.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "FC-101-45s"
+textures = ["redbrown_chunk.png", "redbrown_chunk.png", "redbrown_flat.png", "redbrown_flat.png", "redbrown_chunk.png"]
+shape_name = "Slope"
+
+[[block]]
+pretty_name = "FC-103_SUPRT"
+textures = ["redbrown_support.png"]
 shape_name = "CubeStatic"
 
 [[block]]
