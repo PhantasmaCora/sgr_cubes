@@ -156,6 +156,14 @@ pub struct BlockDrawContext {
     pub obstructions: [bool; 6],
 }
 
+impl Default for BlockDrawContext {
+    fn default() -> BlockDrawContext {
+        Self {
+            obstructions: [false; 6]
+        }
+    }
+}
+
 pub struct ChunkDrawContext<'a> {
     pub minus_z: Option<ArrayView2<'a, BlockInstance>>,
     pub plus_z: Option<ArrayView2<'a, BlockInstance>>,

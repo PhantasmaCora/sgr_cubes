@@ -54,6 +54,7 @@ struct State<'a> {
     camera_controller: camera::CameraController,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
+    camera_bind_group_layout: wgpu::BindGroupLayout,
     camera_bind_group: wgpu::BindGroup,
     depth_texture: texture::Texture,
     diffuse_bind_group: wgpu::BindGroup,
@@ -472,6 +473,7 @@ impl<'a> State<'a> {
             camera_controller,
             camera_uniform,
             camera_buffer,
+            camera_bind_group_layout,
             camera_bind_group,
             depth_texture,
             diffuse_bind_group,
@@ -534,6 +536,15 @@ impl<'a> State<'a> {
                 } else {
                     t_select as u16
                 };
+
+                self.ui_core.update_wield_item(
+                    ui::WieldItem::Block(self.block_select),
+                    &self.device,
+                    &self.queue,
+                    &self.block_registry,
+                    &self.shape_registry,
+                    Some( ( &self.render_pipeline, &self.camera_bind_group_layout, &self.diffuse_bind_group, &self.colormap_bind_group ) ),
+                );
 
                 true
             }
