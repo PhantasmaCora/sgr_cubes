@@ -248,10 +248,10 @@ impl UICore {
 
 
                     let wielditem_vertices = vec![
-                        UIVertex{ position: [ -0.9 - wielditem_size as f32 / target_size.0 as f32, -0.9 + wielditem_size as f32 / target_size.0 as f32 ], uv: [0.0, 0.0] },
-                        UIVertex{ position: [ -0.9 + wielditem_size as f32 / target_size.0 as f32, -0.9 + wielditem_size as f32 / target_size.0 as f32 ], uv: [1.0, 0.0] },
-                        UIVertex{ position: [ -0.9 - wielditem_size as f32 / target_size.0 as f32, -0.9 - wielditem_size as f32 / target_size.0 as f32 ], uv: [0.0, 1.0] },
-                        UIVertex{ position: [ -0.9 + wielditem_size as f32 / target_size.0 as f32, -0.9 - wielditem_size as f32 / target_size.0 as f32 ], uv: [1.0, 1.0] },
+                        UIVertex{ position: [ -0.9 - wielditem_size as f32 / target_size.0 as f32, -0.9 + wielditem_size as f32 / target_size.1 as f32 ], uv: [0.0, 0.0] },
+                        UIVertex{ position: [ -0.9 + wielditem_size as f32 / target_size.0 as f32, -0.9 + wielditem_size as f32 / target_size.1 as f32 ], uv: [1.0, 0.0] },
+                        UIVertex{ position: [ -0.9 - wielditem_size as f32 / target_size.0 as f32, -0.9 - wielditem_size as f32 / target_size.1 as f32 ], uv: [0.0, 1.0] },
+                        UIVertex{ position: [ -0.9 + wielditem_size as f32 / target_size.0 as f32, -0.9 - wielditem_size as f32 / target_size.1 as f32 ], uv: [1.0, 1.0] },
                     ];
                     let wielditem_indices: Vec<u16> = vec![
                         0, 2, 1,
