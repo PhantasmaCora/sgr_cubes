@@ -29,6 +29,8 @@ mod rotation_group;
 
 mod data_loader;
 
+mod ui;
+
 struct MouseOps {
     left: bool,
     right: bool,
@@ -67,6 +69,7 @@ struct State<'a> {
     selected_block: Option<(usize, usize, usize)>,
     select_timer: u16,
     last_qsecond: Instant,
+    ui_core: ui::UICore,
 }
 
 impl<'a> State<'a> {
@@ -450,6 +453,9 @@ impl<'a> State<'a> {
         let mouse_pressed = MouseOps{left: false, right: false, left_just_now: false, right_just_now: false };
         let block_select = 1;
 
+
+        let ui_core = ui::UICore::new(&config.format, &device, &queue,);
+
         Self {
             surface,
             device,
@@ -481,6 +487,7 @@ impl<'a> State<'a> {
             selected_block: None,
             select_timer: 0,
             last_qsecond: Instant::now(),
+            ui_core,
         }
     }
 
@@ -792,8 +799,12 @@ impl<'a> State<'a> {
             render_pass.draw_indexed(0..num_indices, 0, 0..1);
         }
 
+        // create ui draw encoder
+        let ui_encoder = self.ui_core.draw( ui::UIMode::Gameplay, (self.config.width, self.config.height), &view, &self.device, &self.queue );
+
         // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(encoder.finish()));
+        let draw_vec = vec![ encoder.finish(), ui_encoder.expect("Error rendering the UI").finish() ];
+        self.queue.submit( draw_vec.into_iter() );
         output.present();
 
         Ok(())

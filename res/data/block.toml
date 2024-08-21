@@ -140,6 +140,21 @@ textures = ["redbrown_support.png"]
 shape_name = "CubeStatic"
 
 [[block]]
+pretty_name = "CrM-100"
+textures = ["red_flat.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "CrM-101"
+textures = ["red_tile.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "CrM-102"
+textures = ["red_tile.png", "red_tile.png", "red_chunk.png"]
+shape_name = "CubeStatic"
+
+[[block]]
 pretty_name = "WARN-01"
 textures = ["caution_stripe.png"]
 shape_name = "CubeStatic"
