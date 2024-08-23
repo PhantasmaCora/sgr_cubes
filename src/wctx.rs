@@ -71,6 +71,7 @@ struct State<'a> {
     select_timer: u16,
     last_qsecond: Instant,
     ui_core: ui::UICore,
+    ui_mode: ui::UIMode,
 }
 
 impl<'a> State<'a> {
@@ -100,6 +101,10 @@ impl<'a> State<'a> {
 
         let mut feature_list = wgpu::Features::empty();
         feature_list.insert( wgpu::Features::CLEAR_TEXTURE );
+        feature_list.insert( wgpu::Features::PUSH_CONSTANTS );
+
+        let mut lim = wgpu::Limits::default();
+        lim.max_push_constant_size = 128;
 
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
@@ -109,7 +114,7 @@ impl<'a> State<'a> {
                required_limits: if cfg!(target_arch = "wasm32") {
                     wgpu::Limits::downlevel_webgl2_defaults()
                 } else {
-                    wgpu::Limits::default()
+                    lim
                 },
                 label: None,
                 memory_hints: wgpu::MemoryHints::Performance
@@ -455,7 +460,8 @@ impl<'a> State<'a> {
         let block_select = 1;
 
 
-        let ui_core = ui::UICore::new(&config.format, &device, &queue,);
+        let ui_core = ui::UICore::new(&config.format, &config, &device, &queue,);
+        let ui_mode = ui::UIMode::PauseMenu;
 
         Self {
             surface,
@@ -490,6 +496,7 @@ impl<'a> State<'a> {
             select_timer: 0,
             last_qsecond: Instant::now(),
             ui_core,
+            ui_mode,
         }
     }
 
@@ -507,155 +514,165 @@ impl<'a> State<'a> {
             self.projection.resize(new_size.width, new_size.height);
 
             self.depth_texture = texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+
+            self.ui_core.resize( new_size, &self.device, &self.queue );
         }
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(key),
+        match self.ui_mode {
+            ui::UIMode::Gameplay => {
+
+                match event {
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(key),
+                                state,
+                                ..
+                            },
+                        ..
+                    } => self.camera_controller.process_keyboard(*key, *state),
+                    WindowEvent::MouseWheel { delta, .. } => {
+                        //self.camera_controller.process_scroll(delta);
+                        let shift = match delta {
+                            MouseScrollDelta::LineDelta(_, scroll) => -scroll * 0.5,
+                            MouseScrollDelta::PixelDelta(PhysicalPosition { y: scroll, .. }) => -*scroll as f32,
+                        };
+                        let shift_i = ( shift * -2.0 ) as i32;
+                        let t_select = self.block_select as i32 + shift_i;
+                        self.block_select = if t_select <= 0 {
+                            self.block_registry.get_num_blocks() - 1
+                        } else if t_select >= self.block_registry.get_num_blocks() as i32 {
+                            1 as u16
+                        } else {
+                            t_select as u16
+                        };
+
+                        self.ui_core.update_wield_item(
+                            ui::WieldItem::Block(self.block_select),
+                            &self.device,
+                            &self.queue,
+                            &self.block_registry,
+                            &self.shape_registry,
+                            Some( ( &self.render_pipeline, &self.camera_bind_group_layout, &self.diffuse_bind_group, &self.colormap_bind_group ) ),
+                        );
+
+                        true
+                    }
+                    WindowEvent::MouseInput {
+                        button: MouseButton::Left,
                         state,
                         ..
-                    },
-                ..
-            } => self.camera_controller.process_keyboard(*key, *state),
-            WindowEvent::MouseWheel { delta, .. } => {
-                //self.camera_controller.process_scroll(delta);
-                let shift = match delta {
-                    MouseScrollDelta::LineDelta(_, scroll) => -scroll * 0.5,
-                    MouseScrollDelta::PixelDelta(PhysicalPosition { y: scroll, .. }) => -*scroll as f32,
-                };
-                let shift_i = ( shift * -2.0 ) as i32;
-                let t_select = self.block_select as i32 + shift_i;
-                self.block_select = if t_select <= 0 {
-                    self.block_registry.get_num_blocks() - 1
-                } else if t_select >= self.block_registry.get_num_blocks() as i32 {
-                    1 as u16
-                } else {
-                    t_select as u16
-                };
+                    } => {
+                        self.mouse_pressed.left = *state == ElementState::Pressed;
+                        self.mouse_pressed.left_just_now = self.mouse_pressed.left;
+                        true
+                    }
+                    WindowEvent::MouseInput {
+                        button: MouseButton::Right,
+                        state,
+                        ..
+                    } => {
+                        self.mouse_pressed.right = *state == ElementState::Pressed;
+                        self.mouse_pressed.right_just_now = self.mouse_pressed.right;
+                        true
+                    }
+                    _ => false,
+                }
 
-                self.ui_core.update_wield_item(
-                    ui::WieldItem::Block(self.block_select),
-                    &self.device,
-                    &self.queue,
-                    &self.block_registry,
-                    &self.shape_registry,
-                    Some( ( &self.render_pipeline, &self.camera_bind_group_layout, &self.diffuse_bind_group, &self.colormap_bind_group ) ),
-                );
-
-                true
             }
-            WindowEvent::MouseInput {
-                button: MouseButton::Left,
-                state,
-                ..
-            } => {
-                self.mouse_pressed.left = *state == ElementState::Pressed;
-                self.mouse_pressed.left_just_now = self.mouse_pressed.left;
-                true
+            _ => {
+                match event {
+                    WindowEvent::CursorMoved{ device_id, position } => {
+                        self.ui_core.cursor_moved( self.ui_mode, position );
+                        true
+                    }
+                    WindowEvent::MouseInput{ state, button, .. } => {
+                        self.ui_core.mouse_input( self.ui_mode, state, button );
+                        true
+                    }
+                    _ => {
+                        false
+                    }
+                }
             }
-            WindowEvent::MouseInput {
-                button: MouseButton::Right,
-                state,
-                ..
-            } => {
-                self.mouse_pressed.right = *state == ElementState::Pressed;
-                self.mouse_pressed.right_just_now = self.mouse_pressed.right;
-                true
-            }
-            _ => false,
         }
     }
 
     fn update(&mut self, dt: std::time::Duration) {
-        self.camera_controller.update_camera(&mut self.camera, dt);
-        self.camera_uniform.update_view_proj(&self.camera, &self.projection);
-        self.queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_uniform]),
-        );
+        match self.ui_mode {
+            ui::UIMode::Gameplay => {
+                self.camera_controller.update_camera(&mut self.camera, dt);
+                self.camera_uniform.update_view_proj(&self.camera, &self.projection);
+                self.queue.write_buffer(
+                    &self.camera_buffer,
+                    0,
+                    bytemuck::cast_slice(&[self.camera_uniform]),
+                );
 
-        // do block breaking and placing
-        let mut last = grid_ray::ilattice::glam::IVec3::NEG_ONE;
-        let mut current = grid_ray::ilattice::glam::IVec3::NEG_ONE;
-        let dir = self.camera.get_forward_vector();
-        let mut ray_iter = GridRayIter3::new(
-            grid_ray::ilattice::glam::Vec3A::new( self.camera.position.x, self.camera.position.y, self.camera.position.z ), // start position
-            grid_ray::ilattice::glam::Vec3A::new( dir.x, dir.y, dir.z )
-        );
+                // do block breaking and placing
+                let mut last = grid_ray::ilattice::glam::IVec3::NEG_ONE;
+                let mut current = grid_ray::ilattice::glam::IVec3::NEG_ONE;
+                let dir = self.camera.get_forward_vector();
+                let mut ray_iter = GridRayIter3::new(
+                    grid_ray::ilattice::glam::Vec3A::new( self.camera.position.x, self.camera.position.y, self.camera.position.z ), // start position
+                    grid_ray::ilattice::glam::Vec3A::new( dir.x, dir.y, dir.z )
+                );
 
-        let mut run = true;
-        let mut hit = false;
-        while run {
-            let next = ray_iter.next().unwrap();
-            if next.0 > 5.0 { run = false; }
-            last = current;
-            current = next.1;
-            if current.x >= 0 && current.y >= 0 && current.z >= 0 &&
-            current.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 {
-                let bdef = self.chunk_manager.get_block( ( current.x as usize, current.y as usize, current.z as usize ) ).blockdef;
-                if bdef != 0 {
-                    run = false;
-                    hit = true;
+                let mut run = true;
+                let mut hit = false;
+                while run {
+                    let next = ray_iter.next().unwrap();
+                    if next.0 > 5.0 { run = false; }
+                    last = current;
+                    current = next.1;
+                    if current.x >= 0 && current.y >= 0 && current.z >= 0 &&
+                    current.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 {
+                        let bdef = self.chunk_manager.get_block( ( current.x as usize, current.y as usize, current.z as usize ) ).blockdef;
+                        if bdef != 0 {
+                            run = false;
+                            hit = true;
+                        }
+                    }
+                }
+                if hit {
+                    self.selected_block = Some( ( current.x as usize, current.y as usize, current.z as usize ) );
+                } else {
+                    self.selected_block = None;
+                }
+
+                if hit && self.mouse_pressed.left_just_now {
+                    let mut broken = self.chunk_manager.get_mut_block( ( current.x as usize, current.y as usize, current.z as usize ) );
+                    broken.blockdef = 0;
+                    broken.exparam = 0;
+                } else if hit && self.mouse_pressed.right_just_now && (last.x >= 0 && last.y >= 0 && last.z >= 0 &&
+                    last.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && last.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && last.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32) {
+                    let mut placed = self.chunk_manager.get_mut_block( ( last.x as usize, last.y as usize, last.z as usize ) );
+                    placed.blockdef = self.block_select;
+                    placed.exparam = 0;
+                }
+
+
+                {
+                    self.chunk_manager.update_dirty_chunks( &self.block_registry, &self.shape_registry );
+                }
+
+                let now = Instant::now();
+                if now.duration_since(self.last_qsecond) >= Duration::new(0, 250_000_000) {
+                    self.last_qsecond = now;
+                    self.select_timer += 1;
+                    self.select_timer %= 13;
                 }
             }
-        }
-        if hit {
-            self.selected_block = Some( ( current.x as usize, current.y as usize, current.z as usize ) );
-        } else {
-            self.selected_block = None;
-        }
+            ui::UIMode::PauseMenu => {
 
-        if hit && self.mouse_pressed.left_just_now {
-            let mut broken = self.chunk_manager.get_mut_block( ( current.x as usize, current.y as usize, current.z as usize ) );
-            broken.blockdef = 0;
-            broken.exparam = 0;
-        } else if hit && self.mouse_pressed.right_just_now && (last.x >= 0 && last.y >= 0 && last.z >= 0 &&
-            last.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && last.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && last.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32) {
-            let mut placed = self.chunk_manager.get_mut_block( ( last.x as usize, last.y as usize, last.z as usize ) );
-            placed.blockdef = self.block_select;
-            placed.exparam = 0;
-        }
+            }
 
-
-        {
-            self.chunk_manager.update_dirty_chunks( &self.block_registry, &self.shape_registry );
-        }
-
-        let now = Instant::now();
-        if now.duration_since(self.last_qsecond) >= Duration::new(0, 250_000_000) {
-            self.last_qsecond = now;
-            self.select_timer += 1;
-            self.select_timer %= 13;
         }
 
         self.mouse_pressed.left_just_now = false;
         self.mouse_pressed.right_just_now = false;
-    }
-
-    fn change_buffers(&mut self, vsource: &[Vertex], isource: &[u16]) {
-        let vertex_buffer = self.device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(vsource),
-                usage: wgpu::BufferUsages::VERTEX,
-            }
-        );
-        self.vertex_buffer = vertex_buffer;
-
-        let index_buffer = self.device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(isource),
-                usage: wgpu::BufferUsages::INDEX,
-            }
-        );
-        self.index_buffer = index_buffer;
-        self.num_indices = isource.len() as u32;
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -811,7 +828,7 @@ impl<'a> State<'a> {
         }
 
         // create ui draw encoder
-        let ui_encoder = self.ui_core.draw( ui::UIMode::Gameplay, (self.config.width, self.config.height), &view, &self.device, &self.queue );
+        let ui_encoder = self.ui_core.draw( self.ui_mode, (self.config.width, self.config.height), &view, &self.device, &self.queue );
 
         // submit will accept anything that implements IntoIter
         let draw_vec = vec![ encoder.finish(), ui_encoder.expect("Error rendering the UI").finish() ];
@@ -911,15 +928,7 @@ pub async fn run() {
     let mut state = State::new(&window).await;
     let mut last_render_time = Instant::now();
 
-    window
-    .set_cursor_grab(winit::window::CursorGrabMode::Confined)
-    .or_else(|_e| window.set_cursor_grab(winit::window::CursorGrabMode::Locked))
-    .unwrap();
-    window.set_cursor_visible(false);
-
     {
-        let bi = state.chunk_manager.get_mut_block( ( 63, 31, 63 ) );
-        bi.blockdef = 2;
         let bi_2 = state.chunk_manager.get_mut_block( ( 64, 32, 63 ) );
         bi_2.blockdef = 3;
     }
@@ -936,15 +945,17 @@ pub async fn run() {
                 event: DeviceEvent::MouseMotion{ delta, },
                 .. // We're not using device_id currently
             } => {
-                state.camera_controller.process_mouse(delta.0, delta.1)
+                if state.ui_mode == ui::UIMode::Gameplay {
+                    state.camera_controller.process_mouse(delta.0, delta.1)
+                }
             }
             Event::WindowEvent {
                 ref event,
                 window_id,
             } if window_id == state.window().id() => if !state.input(event) {
                 match event {
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
+                    WindowEvent::CloseRequested => control_flow.exit(),
+                    WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
                                 state: ElementState::Pressed,
@@ -952,12 +963,24 @@ pub async fn run() {
                                 ..
                             },
                         ..
-                    } => control_flow.exit(),
+                    } => {
+                        if state.ui_mode == ui::UIMode::Gameplay {
+                            state.ui_mode = ui::UIMode::PauseMenu;
+                            let _ = state.window.set_cursor_grab(winit::window::CursorGrabMode::None);
+                            state.window.set_cursor_visible(true);
+                        } else if state.ui_mode == ui::UIMode::PauseMenu {
+                            state.ui_mode = ui::UIMode::Gameplay;
+                            let _ = state.window
+                            .set_cursor_grab(winit::window::CursorGrabMode::Confined)
+                            .or_else(|_e| state.window.set_cursor_grab(winit::window::CursorGrabMode::Locked));
+                            state.window.set_cursor_visible(false);
+                        }
+                    }
                     WindowEvent::Resized(physical_size) => {
                         state.resize(*physical_size);
                     }
                     WindowEvent::Focused(has) => {
-                        if *has {
+                        if *has && state.ui_mode == ui::UIMode::Gameplay {
                             let _ = state.window
                             .set_cursor_grab(winit::window::CursorGrabMode::Confined)
                             .or_else(|_e| state.window.set_cursor_grab(winit::window::CursorGrabMode::Locked));

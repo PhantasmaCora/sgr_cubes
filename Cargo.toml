@@ -22,6 +22,8 @@ toml = "0.8.19"
 ilattice = "0.4.0"
 grid-ray = { git = "https://github.com/bonsairobo/ilattice-rs/" }
 glam = "0.28.0"
+cushy = "0.4.0"
+figures = "0.4.0"
 
 [dependencies.image]
 version = "0.24"
