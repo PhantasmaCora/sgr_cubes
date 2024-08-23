@@ -600,7 +600,32 @@ impl<'a> State<'a> {
         }
     }
 
+    fn update_ui_mode(&mut self, new: ui::UIMode) {
+        match new {
+            ui::UIMode::Gameplay => {
+                let _ = self.window
+                .set_cursor_grab(winit::window::CursorGrabMode::Confined)
+                .or_else(|_e| self.window.set_cursor_grab(winit::window::CursorGrabMode::Locked));
+                self.window.set_cursor_visible(false);
+                self.ui_mode = ui::UIMode::Gameplay;
+            }
+            ui::UIMode::PauseMenu => {
+                let _ = self.window.set_cursor_grab(winit::window::CursorGrabMode::None);
+                self.window.set_cursor_visible(true);
+                self.ui_mode = ui::UIMode::PauseMenu;
+            }
+            ui::UIMode::QuitGameplay => {
+                let _ = self.window.set_cursor_grab(winit::window::CursorGrabMode::None);
+                self.window.set_cursor_visible(true);
+                self.ui_mode = ui::UIMode::QuitGameplay;
+            }
+        }
+
+    }
+
     fn update(&mut self, dt: std::time::Duration) {
+        self.update_ui_mode( self.ui_core.update(self.ui_mode) );
+
         match self.ui_mode {
             ui::UIMode::Gameplay => {
                 self.camera_controller.update_camera(&mut self.camera, dt);
@@ -666,6 +691,9 @@ impl<'a> State<'a> {
                 }
             }
             ui::UIMode::PauseMenu => {
+
+            }
+            _ => {
 
             }
 
@@ -965,15 +993,9 @@ pub async fn run() {
                         ..
                     } => {
                         if state.ui_mode == ui::UIMode::Gameplay {
-                            state.ui_mode = ui::UIMode::PauseMenu;
-                            let _ = state.window.set_cursor_grab(winit::window::CursorGrabMode::None);
-                            state.window.set_cursor_visible(true);
+                            state.update_ui_mode( ui::UIMode::PauseMenu );
                         } else if state.ui_mode == ui::UIMode::PauseMenu {
-                            state.ui_mode = ui::UIMode::Gameplay;
-                            let _ = state.window
-                            .set_cursor_grab(winit::window::CursorGrabMode::Confined)
-                            .or_else(|_e| state.window.set_cursor_grab(winit::window::CursorGrabMode::Locked));
-                            state.window.set_cursor_visible(false);
+                            state.update_ui_mode( ui::UIMode::Gameplay );
                         }
                     }
                     WindowEvent::Resized(physical_size) => {
@@ -1010,6 +1032,10 @@ pub async fn run() {
                 }
             }
             Event::AboutToWait => {
+                if state.ui_mode == ui::UIMode::QuitGameplay {
+                    control_flow.exit();
+                }
+
 
                 // RedrawRequested will only trigger once unless we manually
                 // request it.

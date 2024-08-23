@@ -16,11 +16,18 @@ use cushy::{
     widgets
 };
 use cushy::widget::MakeWidget;
+use cushy::value::{
+    Source,
+    Dynamic,
+    DynamicReader,
+    Destination
+};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum UIMode {
     Gameplay,
-    PauseMenu
+    PauseMenu,
+    QuitGameplay,
 }
 
 pub struct UICore {
@@ -38,7 +45,8 @@ pub struct UICore {
     pause_buttons_tex: cushy::kludgine::Texture,
     pause_buttons_srctex: crate::wctx::texture::Texture,
     pause_buttons_bind_group: wgpu::BindGroup,
-    pub wants_to_quit: bool,
+    ret: Dynamic<bool>,
+    quit: Dynamic<bool>,
 }
 
 impl UICore {
@@ -263,18 +271,38 @@ impl UICore {
 
         let mut menub_list = cushy::widget::WidgetList::new();
 
+
+        let do_return = Dynamic::new(false);
+        let do_quit = Dynamic::new(false);
+        let ret = do_return.clone();
+        let quit = do_quit.clone();
+
+        menub_list.push( widgets::Expand::weighted(8, widgets::Space::clear() ) );
+
         let mut return_button = widgets::Button::new( widgets::Label::<&str>::new("Continue") );
         return_button = return_button.kind( widgets::button::ButtonKind::Solid );
-        return_button = return_button.on_click( |_click| {  } );
-        menub_list.push(widgets::Expand::new(return_button));
+        return_button = return_button.on_click( move |click| { do_return.set(true); } );
+        menub_list.push( widgets::Expand::weighted(4, return_button) );
+
+        //let mut options_button = widgets::Button::new( widgets::Label::<&str>::new("Options") );
+        //options_button = options_button.kind( widgets::button::ButtonKind::Solid );
+        //options_button = options_button.on_click( |click| {  } );
+        //menub_list.push(widgets::Expand::new(options_button));
 
         let mut quit_button = widgets::Button::new( widgets::Label::<&str>::new("Quit") );
         quit_button = quit_button.kind( widgets::button::ButtonKind::Solid );
-        quit_button = quit_button.on_click( |_click| {  } );
-        menub_list.push(widgets::Expand::new(quit_button));
+        quit_button = quit_button.on_click( move |_click| { do_quit.set(true); } );
+        menub_list.push( widgets::Expand::weighted(4, quit_button) );
 
+        menub_list.push( widgets::Expand::weighted(8, widgets::Space::clear() ) );
 
         let menub_stack = widgets::Stack::rows( menub_list );
+
+        let mut menub_list2 = cushy::widget::WidgetList::new();
+        menub_list2.push( widgets::Expand::weighted(56, menub_stack ) );
+        menub_list2.push( widgets::Expand::weighted(44, widgets::Space::clear() ) );
+
+        let menub_stack2 = widgets::Stack::columns( menub_list2 );
 
         let mut styles = styles::Styles::new();
         styles.insert( &styles::components::CornerRadius, styles::CornerRadii{ top_left: figures::units::Px::new(0), top_right: figures::units::Px::new(0), bottom_left: figures::units::Px::new(0), bottom_right: figures::units::Px::new(0) } );
@@ -293,11 +321,9 @@ impl UICore {
 
         styles.insert( &styles::components::BaseTextSize, styles::Dimension::Px( Px::new(48) ) );
 
-        let menub_style = widgets::Style::new( styles, menub_stack );
+        let menub_style = widgets::Style::new( styles, menub_stack2 );
 
-        let menub_align = widgets::Align::new( styles::Edges { left: styles::FlexibleDimension::Dimension( styles::Dimension::Px(0.into()) ), right: styles::FlexibleDimension::Dimension( styles::Dimension::Px( (config.width as f32 * 0.45).into()) ), top: styles::FlexibleDimension::Dimension( styles::Dimension::Px(50.into()) ), bottom: styles::FlexibleDimension::Dimension( styles::Dimension::Px(50.into()) ) }, menub_style );
-
-        let mut builder = cushy::window::StandaloneWindowBuilder::new( menub_align ).transparent();
+        let mut builder = cushy::window::StandaloneWindowBuilder::new( menub_style ).transparent();
         builder = builder.size( figures::Size { width: config.width, height: config.height } );
         //builder = builder.multisample_count(1);
         let mut pause_buttonmenu = builder.finish_virtual(device, queue);
@@ -350,8 +376,6 @@ impl UICore {
 
 
 
-        let wants_to_quit = false;
-
         Self{
             crosshair_tex,
             crosshair_bind_group,
@@ -367,7 +391,8 @@ impl UICore {
             pause_buttons_tex,
             pause_buttons_srctex,
             pause_buttons_bind_group,
-            wants_to_quit,
+            ret,
+            quit,
         }
     }
 
@@ -446,6 +471,25 @@ impl UICore {
             UIMode::PauseMenu => { self.pause_buttonmenu.mouse_input(cushy::window::DeviceId::Virtual(0), kstate, kbutton); }
             _ => {}
         }
+    }
+
+    pub fn update(&self, mode: UIMode ) -> UIMode {
+        match mode {
+            UIMode::PauseMenu => {
+                if self.ret.get() {
+                    self.ret.set(false);
+                    UIMode::Gameplay
+                } else if self.quit.get() {
+                    self.quit.set(false);
+                    UIMode::QuitGameplay
+                } else {
+                    UIMode::PauseMenu
+                }
+            }
+            _ => { mode }
+        }
+
+
     }
 
     pub fn draw(&mut self, mode: UIMode, target_size: (u32, u32), target_view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) -> Result<wgpu::CommandEncoder, Error> {
@@ -666,6 +710,10 @@ impl UICore {
                 }
 
                 Ok(encoder)
+            }
+            _ => { Ok( device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Empty Encoder"),
+                }) )
             }
 
         }
