@@ -279,7 +279,7 @@ impl UICore {
 
         menub_list.push( widgets::Expand::weighted(8, widgets::Space::clear() ) );
 
-        let mut return_button = widgets::Button::new( widgets::Label::<&str>::new("Continue") );
+        let mut return_button = widgets::Button::new( widgets::Label::<&str>::new("CONTINUE") );
         return_button = return_button.kind( widgets::button::ButtonKind::Solid );
         return_button = return_button.on_click( move |click| { do_return.set(true); } );
         menub_list.push( widgets::Expand::weighted(4, return_button) );
@@ -289,7 +289,7 @@ impl UICore {
         //options_button = options_button.on_click( |click| {  } );
         //menub_list.push(widgets::Expand::new(options_button));
 
-        let mut quit_button = widgets::Button::new( widgets::Label::<&str>::new("Quit") );
+        let mut quit_button = widgets::Button::new( widgets::Label::<&str>::new("QUIT") );
         quit_button = quit_button.kind( widgets::button::ButtonKind::Solid );
         quit_button = quit_button.on_click( move |_click| { do_quit.set(true); } );
         menub_list.push( widgets::Expand::weighted(4, quit_button) );
@@ -321,12 +321,22 @@ impl UICore {
 
         styles.insert( &styles::components::BaseTextSize, styles::Dimension::Px( Px::new(48) ) );
 
+        let ffl = styles::FontFamilyList::from(vec![ styles::FamilyOwned::Cursive ]);
+        styles.insert( &styles::components::FontFamily, ffl );
+
         let menub_style = widgets::Style::new( styles, menub_stack2 );
 
         let mut builder = cushy::window::StandaloneWindowBuilder::new( menub_style ).transparent();
         builder = builder.size( figures::Size { width: config.width, height: config.height } );
-        //builder = builder.multisample_count(1);
         let mut pause_buttonmenu = builder.finish_virtual(device, queue);
+
+        let mut gfx = pause_buttonmenu.graphics(device, queue);
+        let mut fs = gfx.font_system();
+        let mut pathb = std::env::current_dir().expect("failed to get working directory");
+        pathb.push("res/fonts/ZettaStructure.otf");
+        //print!("{:?}\n", pathb);
+        fs.db_mut().load_font_file(pathb).expect("font failed to load");
+        fs.db_mut().set_cursive_family("ZettaStructure");
 
         let pause_buttons_tex = cushy::kludgine::Texture::multisampled(
             &pause_buttonmenu.graphics(device, queue),
