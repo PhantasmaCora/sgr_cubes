@@ -175,6 +175,26 @@ textures = ["orange_chunk.png"]
 shape_name = "CubeStatic"
 
 [[block]]
+pretty_name = "AT-100"
+textures = ["purple_tile.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "AT-101"
+textures = ["purple_chunk.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "AT-101-45s"
+textures = ["purple_chunk.png", "purple_chunk.png", "purple_tile.png", "purple_tile.png", "purple_chunk.png"]
+shape_name = "Slope"
+
+[[block]]
+pretty_name = "AT-104"
+textures = ["purple_grind.png"]
+shape_name = "CubeStatic"
+
+[[block]]
 pretty_name = "WARN-01"
 textures = ["caution_stripe.png"]
 shape_name = "CubeStatic"
@@ -197,4 +217,29 @@ shape_name = "CubeStatic"
 [[block]]
 pretty_name = "BGF-Rock"
 textures = ["cobble.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "CRYSTAL+Am"
+textures = ["purple_crystal.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "Case CRYSTAL+Am"
+textures = ["purple_crystal.png", "crystalcase_bottom.png", "crystalcase_side.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "ZC-Casing"
+textures = ["crystalcase_bottom.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "AU-Casing"
+textures = ["yellow_grey_case.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "AU-Cy102"
+textures = ["yellow_grey_case.png", "yellow_grey_case.png", "yellow_grey_stripes.png"]
 shape_name = "CubeStatic"
