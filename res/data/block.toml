@@ -155,6 +155,26 @@ textures = ["red_tile.png", "red_tile.png", "red_chunk.png"]
 shape_name = "CubeStatic"
 
 [[block]]
+pretty_name = "VO-100"
+textures = ["orange_flat.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "VO-101"
+textures = ["orange_tile.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "VO-101-45s"
+textures = ["orange_tile.png", "orange_tile.png", "orange_flat.png", "orange_flat.png", "orange_tile.png"]
+shape_name = "Slope"
+
+[[block]]
+pretty_name = "VO-102"
+textures = ["orange_chunk.png"]
+shape_name = "CubeStatic"
+
+[[block]]
 pretty_name = "WARN-01"
 textures = ["caution_stripe.png"]
 shape_name = "CubeStatic"
@@ -163,3 +183,18 @@ shape_name = "CubeStatic"
 pretty_name = "WARN-01-45s"
 textures = ["caution_stripe.png"]
 shape_name = "Slope"
+
+[[block]]
+pretty_name = "CFA-Nodules"
+textures = ["nodules.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "CHT-Rock"
+textures = ["brown_rock.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "BGF-Rock"
+textures = ["cobble.png"]
+shape_name = "CubeStatic"
