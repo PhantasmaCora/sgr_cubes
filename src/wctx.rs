@@ -1,6 +1,11 @@
 
 use std::time::{Instant, Duration};
 use std::path::PathBuf;
+use std::io::{
+    Write,
+    Read
+};
+
 
 use winit::{
     event::*,
@@ -12,6 +17,8 @@ use winit::{
 };
 
 use wgpu::util::DeviceExt;
+
+use fs_extra::dir::create_all;
 
 mod camera;
 
@@ -125,7 +132,7 @@ impl<'a> State<'a> {
         let ui_mode = ui::UIMode::Gameplay;
 
 
-        let wss = world::WorldSavestate::new();
+        let wss = Self::load_world().unwrap_or( world::WorldSavestate::new() );
         let wr = world::WorldRender::new(&device, &queue, &config, wss);
 
         Self {
@@ -319,6 +326,40 @@ impl<'a> State<'a> {
 
         Ok(())
     }
+
+    fn load_world() -> Option<world::WorldSavestate> {
+        let pdirs = directories::ProjectDirs::from( "", "PhantasmaCora Games", "SGR_Cubes" ).expect("Failed to get project directories");
+        let mut pbuf = pdirs.data_dir().to_path_buf();
+        pbuf.push( "worlds/world_savestate.pkl" );
+
+        if pbuf.try_exists().expect("Failed to verify game data path") {
+            let mut fi = std::fs::File::open(pbuf).expect("failed to open saved world file");
+            let mut bytes = Vec::<u8>::new();
+            fi.read_to_end(&mut bytes);
+            let deserialized: world::WorldSavestate = serde_pickle::from_slice(&bytes, Default::default()).unwrap();
+
+            Some(deserialized)
+        } else {
+            None
+        }
+    }
+
+    fn save_world(&self) {
+        let pdirs = directories::ProjectDirs::from( "", "PhantasmaCora Games", "SGR_Cubes" ).expect("Failed to get project directories");
+        let mut pbuf = pdirs.data_dir().to_path_buf();
+        pbuf.push( "worlds" );
+
+        create_all( &pbuf, false );
+
+        {
+            pbuf.push("world_savestate.pkl");
+            let mut fi = std::fs::File::create(pbuf).expect("failed to create world file");
+            let serialized = serde_pickle::to_vec(&self.world_render.as_ref().unwrap().world, Default::default()).unwrap();
+            fi.write_all( &serialized ).expect("failed to write world file");
+        }
+
+
+    }
 }
 
 pub async fn run() {
@@ -399,6 +440,7 @@ pub async fn run() {
             }
             Event::AboutToWait => {
                 if state.ui_mode == ui::UIMode::QuitGameplay {
+                    state.save_world();
                     control_flow.exit();
                 }
 

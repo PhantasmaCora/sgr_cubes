@@ -22,6 +22,7 @@ use crate::wctx::rotation_group;
 pub const CHUNK_SIZE: usize = 16;
 pub const WORLD_CHUNKS: usize = 8;
 
+#[repr(C)]
 #[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct BlockInstance {
     pub blockdef: u16,

@@ -25,6 +25,8 @@ glam = "0.28.0"
 cushy = "0.4.0"
 figures = "0.4.0"
 serde-pickle = "1.1.1"
+directories = "5.0.1"
+fs_extra = "1.2"
 
 [dependencies.image]
 version = "0.24"
