@@ -1,7 +1,6 @@
  
 use std::io::Error;
 
-
 use wgpu::util::DeviceExt;
 
 use cgmath::Angle;
@@ -23,7 +22,7 @@ use cushy::value::{
     Destination
 };
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum UIMode {
     Gameplay,
     PauseMenu,
@@ -483,20 +482,20 @@ impl UICore {
         }
     }
 
-    pub fn update(&self, mode: UIMode ) -> UIMode {
+    pub fn update(&self, mode: UIMode ) -> Option<UIMode> {
         match mode {
             UIMode::PauseMenu => {
                 if self.ret.get() {
                     self.ret.set(false);
-                    UIMode::Gameplay
+                    Some(UIMode::Gameplay)
                 } else if self.quit.get() {
                     self.quit.set(false);
-                    UIMode::QuitGameplay
+                    Some(UIMode::QuitGameplay)
                 } else {
-                    UIMode::PauseMenu
+                    None
                 }
             }
-            _ => { mode }
+            _ => { None }
         }
 
 
@@ -736,7 +735,7 @@ impl UICore {
                 let setup = block_render_setup.expect("Some(Block render pipeline) is REQUIRED for drawing block to wielditem texture, found None");
                 let render_pipeline = setup.0;
 
-                let mut tverts = Vec::<crate::wctx::Vertex>::new();
+                let mut tverts = Vec::<crate::wctx::world::Vertex>::new();
                 let mut tinds = Vec::<u16>::new();
 
                 // get block data
@@ -771,7 +770,7 @@ impl UICore {
                 let view = &self.wield_tex.view;
                 let dt_view = &self.wield_dt.view;
 
-                let mut camera_uniform = crate::wctx::CameraUniform{ view_proj:
+                let mut camera_uniform = crate::wctx::world::CameraUniform{ view_proj:
                     ( cgmath::Matrix4::from_translation( cgmath::Vector3::new( 0.5, 0.3, 0.5 ) ) * cgmath::Matrix4::from_nonuniform_scale(0.5, 0.5, 0.1) * cgmath::Matrix4::from_angle_x( cgmath::Rad::atan( 2.0_f32.sqrt() / 2.0 ) ) * cgmath::Matrix4::from_angle_y( cgmath::Rad::full_turn() / -8.0 ) * cgmath::Matrix4::from_translation( cgmath::Vector3::new( -0.5, -0.5, -0.5 ) ) ).into()
                 };
 

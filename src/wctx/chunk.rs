@@ -5,7 +5,12 @@ use ndarray::{
     s
 };
 
-use crate::wctx::Vertex;
+use serde::{
+    Serialize,
+    Deserialize
+};
+
+use crate::wctx::world::Vertex;
 
 use crate::wctx::block::{
     BlockRegistry,
@@ -17,18 +22,26 @@ use crate::wctx::rotation_group;
 pub const CHUNK_SIZE: usize = 16;
 pub const WORLD_CHUNKS: usize = 8;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct BlockInstance {
     pub blockdef: u16,
     pub exparam: u8,
     pub light: u8
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Chunk {
     pub data: Array3<BlockInstance>,
+    #[serde(skip_serializing)]
+    #[serde(default = "get_a_true")]
     pub dirty: bool,
+    #[serde(skip)]
     pub draw_cache: ChunkDrawCache
 }
+fn get_a_true() -> bool {
+    true
+}
+
 
 impl Chunk {
     pub fn new() -> Chunk {
@@ -43,7 +56,7 @@ impl Chunk {
     pub fn from_blockinstance( bi: BlockInstance ) -> Chunk {
         let data = Array3::from_elem((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), bi);
         let dirty = true;
-        let draw_cache = ChunkDrawCache{ vertices: Box::new( [Vertex{ position:[0.,0.,0.], uv: [0.,0.], array_index: 0, light: 1.0 }; 0] ), indices: Box::new( [1; 0] ) };
+        let draw_cache = ChunkDrawCache{ vertices: Vec::<Vertex>::new(), indices: Vec::<u16>::new() };
 
         Self {
             data,
@@ -74,8 +87,8 @@ impl Chunk {
         }
 
         // transfer final data over
-        self.draw_cache.vertices = tverts.into_boxed_slice();
-        self.draw_cache.indices = tinds.into_boxed_slice();
+        self.draw_cache.vertices = tverts;
+        self.draw_cache.indices = tinds;
 
         self.dirty = false;
     }
@@ -142,8 +155,17 @@ fn is_in_bounds( pos: (usize, usize, usize) ) -> bool {
 
 #[derive(Clone)]
 pub struct ChunkDrawCache {
-    pub vertices: Box<[Vertex]>,
-    pub indices: Box<[u16]>
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u16>
+}
+
+impl Default for ChunkDrawCache {
+    fn default() -> ChunkDrawCache {
+        Self {
+            vertices: Vec::<Vertex>::new(),
+            indices: Vec::<u16>::new()
+        }
+    }
 }
 
 impl ChunkDrawCache {
@@ -186,6 +208,7 @@ impl<'a> ChunkDrawContext<'a> {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct ChunkManager {
     pub data: Array3<Chunk>
 }

@@ -12,7 +12,7 @@ log = "0.4"
 wgpu = "22.0"
 pollster = "0.3"
 bytemuck = { version = "1.16", features = [ "derive" ] }
-ndarray = "0.16.0"
+ndarray = { version = "0.16.0", features = ["std", "serde"] }
 cgmath = "0.18"
 anyhow = "1.0"
 num = "0.4.3"
@@ -24,6 +24,7 @@ grid-ray = { git = "https://github.com/bonsairobo/ilattice-rs/" }
 glam = "0.28.0"
 cushy = "0.4.0"
 figures = "0.4.0"
+serde-pickle = "1.1.1"
 
 [dependencies.image]
 version = "0.24"

@@ -7,6 +7,8 @@ use cgmath::{
 
 use crate::wctx::rotation_group;
 use crate::wctx::rotation_group::RotFace;
+use crate::wctx::world::Vertex;
+
 
 use cgmath::One;
 
@@ -58,7 +60,7 @@ pub struct BlockShape {
 }
 
 impl BlockShape {
-    pub fn generate_draw_buffers(&self, vertex_buffer: &mut Vec<super::Vertex>, index_buffer: &mut Vec<u16>, blockdef: &Block, exparam: u8, bdc: crate::wctx::chunk::BlockDrawContext, world_pos: (usize, usize, usize), pos: (usize, usize, usize) ) {
+    pub fn generate_draw_buffers(&self, vertex_buffer: &mut Vec<Vertex>, index_buffer: &mut Vec<u16>, blockdef: &Block, exparam: u8, bdc: crate::wctx::chunk::BlockDrawContext, world_pos: (usize, usize, usize), pos: (usize, usize, usize) ) {
         let mut quat = cgmath::Quaternion::<f32>::one();
         match self.rot_group {
             rotation_group::RotType::RotFace => {
@@ -91,7 +93,7 @@ impl BlockShape {
                 let tex_index = blockdef.textures[ min( f, blockdef.textures.len() - 1 ) ];
                 let mut vec = cgmath::Vector3::new( vertdef[0], vertdef[1], vertdef[2] );
                 vec = quat * vec;
-                vertex_buffer.push( super::Vertex::new( [ world_pos.0 as f32 + center.x + vec.x, world_pos.1 as f32 + center.y + vec.y, world_pos.2 as f32 + center.z + vec.z ], [vertdef[3], vertdef[4]], tex_index, 1.0) );
+                vertex_buffer.push( Vertex::new( [ world_pos.0 as f32 + center.x + vec.x, world_pos.1 as f32 + center.y + vec.y, world_pos.2 as f32 + center.z + vec.z ], [vertdef[3], vertdef[4]], tex_index, 1.0) );
             }
 
             for ind in face.indices.iter() {

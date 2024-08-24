@@ -1,10 +1,25 @@
- 
+
+use std::io::Error;
 use cgmath::*;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
 use winit::dpi::PhysicalPosition;
 use winit::event::*;
 use winit::keyboard::KeyCode;
+
+
+use serde::{
+    Serialize,
+    Deserialize,
+    Serializer,
+    Deserializer,
+    ser::SerializeTuple,
+    de::Visitor,
+    de::SeqAccess,
+};
+
+use std::fmt;
+
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -55,6 +70,56 @@ impl Camera {
     }
 }
 
+impl Serialize for Camera {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut tup = serializer.serialize_tuple(5)?;
+        tup.serialize_element(&self.position.x)?;
+        tup.serialize_element(&self.position.y)?;
+        tup.serialize_element(&self.position.z)?;
+        tup.serialize_element(&self.yaw.0)?;
+        tup.serialize_element(&self.pitch.0)?;
+        tup.end()
+    }
+}
+
+struct CameraVisitor;
+impl<'de> Visitor<'de> for CameraVisitor {
+    type Value = Camera;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a tuple of five f32 values")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, <A as SeqAccess<'de>>::Error>
+        where
+            A: SeqAccess<'de>,
+    {
+        Ok(Camera::new(
+            cgmath::Point3{
+                x: seq.next_element()?.unwrap(),
+                y: seq.next_element()?.unwrap(),
+                z: seq.next_element()?.unwrap()
+            },
+            cgmath::Rad( seq.next_element()?.unwrap() ),
+            cgmath::Rad( seq.next_element()?.unwrap() )
+        ))
+    }
+
+}
+
+impl<'de> Deserialize<'de> for Camera {
+    fn deserialize<D>(deserializer: D) -> Result<Camera, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_tuple(5, CameraVisitor)
+    }
+}
+
+#[derive(Debug)]
 pub struct Projection {
     aspect: f32,
     fovy: Rad<f32>,
