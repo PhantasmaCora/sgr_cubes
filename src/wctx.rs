@@ -129,8 +129,7 @@ impl<'a> State<'a> {
 
 
         let ui_core = ui::UICore::new(&config.format, &config, &device, &queue,);
-        let ui_mode = ui::UIMode::Gameplay;
-
+        let ui_mode = ui::UIMode::MainTitle;
 
         let wss = Self::load_world().unwrap_or( world::WorldSavestate::new() );
         let wr = world::WorldRender::new(&device, &queue, &config, wss);
@@ -266,16 +265,12 @@ impl<'a> State<'a> {
                 self.window.set_cursor_visible(false);
                 self.ui_mode = ui::UIMode::Gameplay;
             }
-            ui::UIMode::PauseMenu => {
+            _ => {
                 let _ = self.window.set_cursor_grab(winit::window::CursorGrabMode::None);
                 self.window.set_cursor_visible(true);
-                self.ui_mode = ui::UIMode::PauseMenu;
+                self.ui_mode = new;
             }
-            ui::UIMode::QuitGameplay => {
-                let _ = self.window.set_cursor_grab(winit::window::CursorGrabMode::None);
-                self.window.set_cursor_visible(true);
-                self.ui_mode = ui::UIMode::QuitGameplay;
-            }
+
         }
 
     }
@@ -441,6 +436,8 @@ pub async fn run() {
             Event::AboutToWait => {
                 if state.ui_mode == ui::UIMode::QuitGameplay {
                     state.save_world();
+                    state.ui_mode = ui::UIMode::MainTitle;
+                } else if state.ui_mode == ui::UIMode::Quit {
                     control_flow.exit();
                 }
 

@@ -74,6 +74,7 @@ impl WorldRender {
         let mut dl = crate::wctx::data_loader::BlockLoader::create(&device, &queue);
         let _ = dl.submit_blockshape_direct( crate::wctx::block::make_cube_shape(), &"CubeStatic".into() );
         let _ = dl.submit_blockshape_direct( crate::wctx::block::make_slope_shape(), &"Slope".into() );
+        let _ = dl.submit_blockshape_direct( crate::wctx::block::make_corner_shape(), &"CornerSlope".into() );
 
         let pal_bytes = include_bytes!("../../res/texture/core/palette.png");
         let pal_img = image::load_from_memory(pal_bytes).unwrap();

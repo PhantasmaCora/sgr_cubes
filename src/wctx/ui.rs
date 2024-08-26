@@ -9,9 +9,12 @@ use figures::units::{
     Px,
     UPx
 };
+use figures::IntoSigned;
 
 use cushy::{
     styles,
+    styles::Dimension,
+    styles::IntoComponentValue,
     widgets
 };
 use cushy::widget::MakeWidget;
@@ -27,6 +30,8 @@ pub enum UIMode {
     Gameplay,
     PauseMenu,
     QuitGameplay,
+    MainTitle,
+    Quit,
 }
 
 pub struct UICore {
@@ -42,10 +47,16 @@ pub struct UICore {
     pause_bind_group: wgpu::BindGroup,
     pause_buttonmenu: cushy::window::VirtualWindow,
     pause_buttons_tex: cushy::kludgine::Texture,
-    pause_buttons_srctex: crate::wctx::texture::Texture,
-    pause_buttons_bind_group: wgpu::BindGroup,
+    menu_copy_tex: crate::wctx::texture::Texture,
+    menu_copy_bind_group: wgpu::BindGroup,
     ret: Dynamic<bool>,
     quit: Dynamic<bool>,
+    main_title: cushy::window::VirtualWindow,
+    main_title_tex: cushy::kludgine::Texture,
+    enter: Dynamic<bool>,
+    quitout: Dynamic<bool>,
+    main_menu_tex: crate::wctx::texture::Texture,
+    main_menu_bind_group: wgpu::BindGroup,
 }
 
 impl UICore {
@@ -268,6 +279,16 @@ impl UICore {
         );
 
 
+        let pause_menu_text_size = styles::DynamicComponent::new({
+            |context: &cushy::context::WidgetContext| -> Option<styles::Component> {
+                let inner_size = context.window().inner_size();
+                context.invalidate_when_changed( inner_size );
+                let value = std::cmp::min( inner_size.get().height * 0.0625, inner_size.get().width * 0.123 ).into_signed();
+                Some( styles::Component::Dimension(Dimension::Px(value) ) )
+            }
+        });
+
+
         let mut menub_list = cushy::widget::WidgetList::new();
 
 
@@ -318,7 +339,7 @@ impl UICore {
         styles.insert( &widgets::button::ButtonDisabledBackground, styles::Color::new(128,128,128,240) );
         styles.insert( &widgets::button::ButtonActiveBackground, styles::Color::new(128,0,0,200) );
 
-        styles.insert( &styles::components::BaseTextSize, styles::Dimension::Px( Px::new(48) ) );
+        styles.insert_dynamic( &styles::components::BaseTextSize, pause_menu_text_size );
 
         let ffl = styles::FontFamilyList::from(vec![ styles::FamilyOwned::Cursive ]);
         styles.insert( &styles::components::FontFamily, ffl );
@@ -346,7 +367,7 @@ impl UICore {
             wgpu::FilterMode::Nearest
         );
 
-        let pause_buttons_srctex = crate::wctx::texture::Texture::from_descriptor(
+        let menu_copy_tex = crate::wctx::texture::Texture::from_descriptor(
             device,
             queue,
             &wgpu::TextureDescriptor {
@@ -366,24 +387,157 @@ impl UICore {
             wgpu::TextureViewDimension::D2
         ).expect("texture creation failed");
 
-        let pause_buttons_bind_group = device.create_bind_group(
+        let menu_copy_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
                 layout: &texture_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&pause_buttons_srctex.view),
+                        resource: wgpu::BindingResource::TextureView(&menu_copy_tex.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&pause_buttons_srctex.sampler),
+                        resource: wgpu::BindingResource::Sampler(&menu_copy_tex.sampler),
                     }
                 ],
-                label: Some("pause_buttons_bind_group"),
+                label: Some("menu_copy_bind_group"),
             }
         );
 
+        let main_title_text_size = styles::DynamicComponent::new({
+            |context: &cushy::context::WidgetContext| -> Option<styles::Component> {
+                let inner_size = context.window().inner_size();
+                context.invalidate_when_changed( inner_size );
+                let value = std::cmp::min( inner_size.get().height * 0.105, inner_size.get().width * 0.11 ).into_signed();
+                Some( styles::Component::Dimension(Dimension::Px(value) ) )
+            }
+        });
 
+        let main_label_a = widgets::label::Label::new("SGR_Cubes".to_string())
+        .with(&styles::components::FontFamily, styles::FontFamilyList::from(vec![ styles::FamilyOwned::Fantasy ]))
+        .with_dynamic(&styles::components::BaseTextSize, main_title_text_size );
+
+        let mut main_title_list2 = cushy::widget::WidgetList::new();
+        main_title_list2.push( main_label_a.expand_weighted(3) );
+
+        let do_enter_saves = Dynamic::new(false);
+        let do_quitgame = Dynamic::new(false);
+        let enter = do_enter_saves.clone();
+        let quitout = do_quitgame.clone();
+
+        let mut main_title_list = cushy::widget::WidgetList::new();
+
+        let mut buttonstyles = styles::Styles::new();
+
+        buttonstyles.insert( &styles::components::CornerRadius, styles::CornerRadii{ top_left: figures::units::Px::new(0), top_right: figures::units::Px::new(0), bottom_left: figures::units::Px::new(0), bottom_right: figures::units::Px::new(0) } );
+        buttonstyles.insert( &styles::components::OutlineColor, styles::Color::new(0,0,0,0) );
+        buttonstyles.insert( &styles::components::HighlightColor, styles::Color::new(0,0,0,0) );
+
+        buttonstyles.insert( &widgets::button::ButtonOutline, styles::Color::new(224,173,83,255) );
+        buttonstyles.insert( &widgets::button::ButtonHoverOutline, styles::Color::new(245,204,25,255) );
+        buttonstyles.insert( &widgets::button::ButtonDisabledOutline, styles::Color::new(87,73,70,255) );
+        buttonstyles.insert( &widgets::button::ButtonActiveOutline, styles::Color::new(218,123,33,255) );
+
+        buttonstyles.insert( &widgets::button::ButtonBackground, styles::Color::new(0,0,0,0) );
+        buttonstyles.insert( &widgets::button::ButtonHoverBackground, styles::Color::new(0,0,0,0) );
+        buttonstyles.insert( &widgets::button::ButtonDisabledBackground, styles::Color::new(0,0,0,0) );
+        buttonstyles.insert( &widgets::button::ButtonActiveBackground, styles::Color::new(0,0,0,0) );
+
+        buttonstyles.insert( &styles::components::FontFamily, styles::FamilyOwned::SansSerif );
+
+        let mut play_button = widgets::Button::new( widgets::Label::<&str>::new("PLAY") );
+        play_button = play_button.kind( widgets::button::ButtonKind::Solid );
+        play_button = play_button.on_click( move |click| { do_enter_saves.set(true); } );
+        main_title_list.push( play_button.with_styles(buttonstyles.clone()) );
+
+        //let mut options_button = widgets::Button::new( widgets::Label::<&str>::new("Options") );
+        //options_button = options_button.kind( widgets::button::ButtonKind::Solid );
+        //options_button = options_button.on_click( |click| {  } );
+        //main_title_list2.push(widgets::Expand::new(options_button));
+
+        let mut quit_button = widgets::Button::new( widgets::Label::<&str>::new("EXIT") );
+        quit_button = quit_button.kind( widgets::button::ButtonKind::Solid );
+        quit_button = quit_button.on_click( move |_click| { do_quitgame.set(true); } );
+        main_title_list.push( quit_button.with_styles(buttonstyles) );
+
+        let main_title_stack = widgets::Stack::rows( main_title_list );
+
+        main_title_list2.push( widgets::Space::clear().expand_weighted(5) );
+        main_title_list2.push( main_title_stack.expand_weighted(3) );
+
+        let main_title_stack2 = widgets::Stack::rows( main_title_list2 );
+
+        let dark_container = widgets::Container::new(main_title_stack2).pad_by(
+            styles::Edges {
+                top: Dimension::Px( Px::new(32)),
+                bottom: Dimension::Px( Px::new(32)),
+                left: Dimension::Px( Px::new(54)),
+                right: Dimension::Px( Px::new(54))
+            }
+        )
+        .background_color( styles::Color::new(0, 0, 0, 240) )
+        .with( &styles::components::CornerRadius, styles::CornerRadii{
+            top_left: styles::Dimension::Px(Px::new(0)),
+            top_right: styles::Dimension::Px(Px::new(0)),
+            bottom_left: styles::Dimension::Px(Px::new(0)),
+            bottom_right: styles::Dimension::Px(Px::new(0))
+        });
+
+        let main_align = widgets::Align::new(
+            styles::Edges {
+                top: styles::FlexibleDimension::Dimension( Dimension::Px( Px::new(32))),
+                bottom: styles::FlexibleDimension::Dimension( Dimension::Px( Px::new(32))),
+                left: styles::FlexibleDimension::Dimension( Dimension::Px( Px::new(24))),
+                right: styles::FlexibleDimension::Auto
+            },
+            dark_container
+        );
+
+        let mut mainbuilder = cushy::window::StandaloneWindowBuilder::new( main_align ).transparent();
+        mainbuilder = mainbuilder.size( figures::Size { width: config.width, height: config.height } );
+        let mut main_title = mainbuilder.finish_virtual(device, queue);
+
+        let mut gfx = main_title.graphics(device, queue);
+        let mut fs = gfx.font_system();
+
+        let mut pathb = std::env::current_dir().expect("failed to get working directory");
+        pathb.push("res/fonts/MechanicalSansSerif.otf");
+        fs.db_mut().load_font_file(pathb).expect("font failed to load");
+        fs.db_mut().set_fantasy_family("MechanicalSansSerif");
+
+        let mut pathb = std::env::current_dir().expect("failed to get working directory");
+        pathb.push("res/fonts/MechanicalSansSerif-Muji.otf");
+        fs.db_mut().load_font_file(pathb).expect("font failed to load");
+        fs.db_mut().set_cursive_family("MechanicalSansSerifMuji");
+
+        let main_title_tex = cushy::kludgine::Texture::multisampled(
+            &main_title.graphics(device, queue),
+            4,
+            figures::Size{width: UPx::new(config.width), height: UPx::new(config.height)},
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            wgpu::FilterMode::Nearest
+        );
+
+        let main_bytes = include_bytes!("../../res/texture/ui/main_menu_bg.png");
+        let main_menu_tex = crate::wctx::texture::Texture::from_bytes(&device, &queue, main_bytes, &"Main Menu Texture").unwrap();
+
+        let main_menu_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&main_menu_tex.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&main_menu_tex.sampler),
+                    }
+                ],
+                label: Some("wielditem_bind_group"),
+            }
+        );
 
         Self{
             crosshair_tex,
@@ -398,10 +552,16 @@ impl UICore {
             pause_bind_group,
             pause_buttonmenu,
             pause_buttons_tex,
-            pause_buttons_srctex,
-            pause_buttons_bind_group,
+            menu_copy_tex,
+            menu_copy_bind_group,
             ret,
             quit,
+            main_title,
+            main_title_tex,
+            enter,
+            quitout,
+            main_menu_tex,
+            main_menu_bind_group,
         }
     }
 
@@ -417,7 +577,7 @@ impl UICore {
             wgpu::FilterMode::Nearest
         );
 
-        self.pause_buttons_srctex = crate::wctx::texture::Texture::from_descriptor(
+        self.menu_copy_tex = crate::wctx::texture::Texture::from_descriptor(
             device,
             queue,
             &wgpu::TextureDescriptor {
@@ -437,27 +597,39 @@ impl UICore {
             wgpu::TextureViewDimension::D2
         ).expect("texture creation failed");
 
-        self.pause_buttons_bind_group = device.create_bind_group(
+        self.menu_copy_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
                 layout: &self.texture_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.pause_buttons_srctex.view),
+                        resource: wgpu::BindingResource::TextureView(&self.menu_copy_tex.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.pause_buttons_srctex.sampler),
+                        resource: wgpu::BindingResource::Sampler(&self.menu_copy_tex.sampler),
                     }
                 ],
-                label: Some("pause_buttons_bind_group"),
+                label: Some("menu_copy_bind_group"),
             }
+        );
+
+        self.main_title.resize( figures::Size { width: UPx::new(new_size.width), height: UPx::new(new_size.height) }, 1.0, queue );
+
+        self.main_title_tex = cushy::kludgine::Texture::multisampled(
+            &self.pause_buttonmenu.graphics(device, queue),
+            4,
+            figures::Size{width: UPx::new(new_size.width), height: UPx::new(new_size.height)},
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            wgpu::FilterMode::Nearest
         );
     }
 
     pub fn cursor_moved(&mut self, mode: UIMode, position: &winit::dpi::PhysicalPosition<f64> ) {
         match mode {
             UIMode::PauseMenu => { self.pause_buttonmenu.cursor_moved(cushy::window::DeviceId::Virtual(0), figures::Point::new( figures::units::Px::new(position.x as i32), figures::units::Px::new(position.y as i32) ) ); }
+            UIMode::MainTitle => { self.main_title.cursor_moved(cushy::window::DeviceId::Virtual(0), figures::Point::new( figures::units::Px::new(position.x as i32), figures::units::Px::new(position.y as i32) ) ); }
             _ => {}
         }
     }
@@ -478,6 +650,7 @@ impl UICore {
 
         match mode {
             UIMode::PauseMenu => { self.pause_buttonmenu.mouse_input(cushy::window::DeviceId::Virtual(0), kstate, kbutton); }
+            UIMode::MainTitle => { self.main_title.mouse_input(cushy::window::DeviceId::Virtual(0), kstate, kbutton); }
             _ => {}
         }
     }
@@ -491,6 +664,17 @@ impl UICore {
                 } else if self.quit.get() {
                     self.quit.set(false);
                     Some(UIMode::QuitGameplay)
+                } else {
+                    None
+                }
+            }
+            UIMode::MainTitle => {
+                if self.enter.get() {
+                    self.enter.set(false);
+                    Some(UIMode::PauseMenu)
+                } else if self.quitout.get() {
+                    self.quitout.set(false);
+                    Some(UIMode::Quit)
                 } else {
                     None
                 }
@@ -631,9 +815,9 @@ impl UICore {
                 let mut bgx = 0.5;
                 let mut bgy = 0.5;
                 if rw < rh {
-                    bgy = rw / rh;
+                    bgy = rw / rh / 2.0;
                 } else {
-                    bgx = rh / rw;
+                    bgx = rh / rw / 2.0;
                 }
 
                 // redraw the button menu
@@ -645,7 +829,7 @@ impl UICore {
                     queue
                 );
 
-                 let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("UI Render Encoder"),
                 });
 
@@ -658,21 +842,21 @@ impl UICore {
                         aspect: wgpu::TextureAspect::All
                     },
                     wgpu::ImageCopyTexture{
-                        texture: &self.pause_buttons_srctex.texture,
+                        texture: &self.menu_copy_tex.texture,
                         mip_level: 0,
                         origin: wgpu::Origin3d{x: 0, y: 0, z: 0},
                         aspect: wgpu::TextureAspect::All
                     },
-                    self.pause_buttons_srctex.texture.size()
+                    self.menu_copy_tex.texture.size()
                 );
 
                 // draw the menu bg
                 {
                     let bg_vertices = vec![
-                        BMVertex{ position: [ -1.0, 1.0 ], uv: [0.0, 0.0], uv2: [0.0, 0.0] },
-                        BMVertex{ position: [ 1.0, 1.0 ], uv: [1.0, 0.0], uv2: [1.0, 0.0] },
-                        BMVertex{ position: [ -1.0, -1.0 ], uv: [0.0, 1.0], uv2: [0.0, 1.0] },
-                        BMVertex{ position: [ 1.0, -1.0 ], uv: [1.0, 1.0], uv2: [1.0, 1.0] },
+                        BMVertex{ position: [ -1.0, 1.0 ], uv: [0.5 - bgx, 0.5 - bgy], uv2: [0.0, 0.0] },
+                        BMVertex{ position: [ 1.0, 1.0 ], uv: [0.5 + bgx, 0.5 - bgy], uv2: [1.0, 0.0] },
+                        BMVertex{ position: [ -1.0, -1.0 ], uv: [0.5 - bgx, 0.5 + bgy], uv2: [0.0, 1.0] },
+                        BMVertex{ position: [ 1.0, -1.0 ], uv: [0.5 + bgx, 0.5 + bgy], uv2: [1.0, 1.0] },
                     ];
                     let bg_indices: Vec<u16> = vec![
                         0, 2, 3,
@@ -712,7 +896,103 @@ impl UICore {
 
                     render_pass.set_pipeline(&self.overlaid_pipeline);
                     render_pass.set_bind_group(0, &self.pause_bind_group, &[]);
-                    render_pass.set_bind_group(1, &self.pause_buttons_bind_group, &[]);
+                    render_pass.set_bind_group(1, &self.menu_copy_bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass.draw_indexed(0..num_indices, 0, 0..1);
+                }
+
+                Ok(encoder)
+            }
+            UIMode::MainTitle => {
+                // setup stuff
+                let rw = self.pause_menu_tex.texture.width() as f32 / target_size.0 as f32;
+                let rh = self.pause_menu_tex.texture.height() as f32 / target_size.1 as f32;
+                let mut bgx = 0.5;
+                let mut bgy = 0.5;
+                if rw < rh {
+                    bgy = rw / rh / 2.0;
+                } else {
+                    bgx = rh / rw / 2.0;
+                }
+
+                // redraw the menu
+                self.main_title.prepare(device, queue);
+                self.main_title.render_into(
+                    &self.main_title_tex,
+                    wgpu::LoadOp::Clear( cushy::styles::Color::new(0, 0, 0, 0) ),
+                    device,
+                    queue
+                );
+
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("UI Render Encoder"),
+                });
+
+                // copy the button menu over
+                encoder.copy_texture_to_texture(
+                    wgpu::ImageCopyTexture{
+                        texture: self.main_title_tex.wgpu(),
+                        mip_level: 0,
+                        origin: wgpu::Origin3d{x: 0, y: 0, z: 0},
+                        aspect: wgpu::TextureAspect::All
+                    },
+                    wgpu::ImageCopyTexture{
+                        texture: &self.menu_copy_tex.texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d{x: 0, y: 0, z: 0},
+                        aspect: wgpu::TextureAspect::All
+                    },
+                    self.menu_copy_tex.texture.size()
+                );
+
+                // draw the menu bg
+                {
+                    let bg_vertices = vec![
+                        BMVertex{ position: [ -1.0, 1.0 ], uv: [0.5 - bgx, 0.5 - bgy], uv2: [0.0, 0.0] },
+                        BMVertex{ position: [ 1.0, 1.0 ], uv: [0.5 + bgx, 0.5 - bgy], uv2: [1.0, 0.0] },
+                        BMVertex{ position: [ -1.0, -1.0 ], uv: [0.5 - bgx, 0.5 + bgy], uv2: [0.0, 1.0] },
+                        BMVertex{ position: [ 1.0, -1.0 ], uv: [0.5 + bgx, 0.5 + bgy], uv2: [1.0, 1.0] },
+                    ];
+                    let bg_indices: Vec<u16> = vec![
+                        0, 2, 3,
+                        0, 3, 1
+                    ];
+
+                    let vertex_buffer = device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&bg_vertices),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        }
+                    );
+                    let index_buffer = device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Index Buffer"),
+                            contents: bytemuck::cast_slice(&bg_indices),
+                            usage: wgpu::BufferUsages::INDEX,
+                        }
+                    );
+                    let num_indices = bg_indices.len() as u32;
+
+                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Crosshair Draw Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &target_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                    });
+
+                    render_pass.set_pipeline(&self.overlaid_pipeline);
+                    render_pass.set_bind_group(0, &self.main_menu_bind_group, &[]);
+                    render_pass.set_bind_group(1, &self.menu_copy_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
                     render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     render_pass.draw_indexed(0..num_indices, 0, 0..1);

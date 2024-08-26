@@ -6,7 +6,7 @@ use std::env;
 
 fn main() -> Result<()> {
     // This tells Cargo to rerun this script if something in /res/ changes.
-    println!("cargo::rerun-if-changed=res");
+    println!("cargo::rerun-if-changed=res/");
     println!("cargo:rerun-if-changed=build.rs");
 
     let out_dir = env::var("OUT_DIR")?;

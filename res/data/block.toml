@@ -25,6 +25,11 @@ textures = ["steelgray_support.png"]
 shape_name = "CubeStatic"
 
 [[block]]
+pretty_name = "ST-100_Cn30"
+textures = ["steelgray_panel.png"]
+shape_name = "CornerSlope"
+
+[[block]]
 pretty_name = "TQ-100"
 textures = ["blue_noise.png"]
 shape_name = "CubeStatic"
@@ -45,6 +50,11 @@ textures = ["blue_support.png"]
 shape_name = "CubeStatic"
 
 [[block]]
+pretty_name = "TQ-100_Cn30"
+textures = ["blue_noise.png"]
+shape_name = "CornerSlope"
+
+[[block]]
 pretty_name = "A_Cf-256y"
 textures = ["yellow_circuit.png"]
 shape_name = "CubeStatic"
@@ -55,6 +65,11 @@ textures = ["yellow_circuit.png", "yellow_circuit.png", "yellow_circuit_s.png", 
 shape_name = "Slope"
 
 [[block]]
+pretty_name = "A_Cf-256y-Cn30"
+textures = ["yellow_circuit_s.png", "yellow_circuit_s.png", "yellow_circuit_s.png", "yellow_circuit.png"]
+shape_name = "CornerSlope"
+
+[[block]]
 pretty_name = "A_Cf-64y"
 textures = ["yellow_circuit_dark.png"]
 shape_name = "CubeStatic"
@@ -63,6 +78,11 @@ shape_name = "CubeStatic"
 pretty_name = "A_Cf-64y-45s"
 textures = ["yellow_circuit_dark.png", "yellow_circuit_dark.png", "yellow_circuit_dark_s.png", "yellow_circuit_dark_s.png", "yellow_circuit_dark.png"]
 shape_name = "Slope"
+
+[[block]]
+pretty_name = "A_Cf-64y-Cn30"
+textures = ["yellow_circuit_dark_s.png", "yellow_circuit_dark_s.png", "yellow_circuit_dark_s.png", "yellow_circuit_dark.png"]
+shape_name = "CornerSlope"
 
 [[block]]
 pretty_name = "KX-103_SUPRT"
@@ -95,6 +115,11 @@ textures = ["fullrusty_support.png"]
 shape_name = "CubeStatic"
 
 [[block]]
+pretty_name = "KvF-100_Cn30"
+textures = ["fullrusty_flat.png"]
+shape_name = "CornerSlope"
+
+[[block]]
 pretty_name = "SN-100"
 textures = ["gray_flat.png"]
 shape_name = "CubeStatic"
@@ -120,6 +145,11 @@ textures = ["gray_support.png"]
 shape_name = "CubeStatic"
 
 [[block]]
+pretty_name = "SN-101_Cn30"
+textures = ["gray_flat.png", "gray_flat.png", "gray_flat.png", "gray_chunk_side.png"]
+shape_name = "CornerSlope"
+
+[[block]]
 pretty_name = "FC-100"
 textures = ["redbrown_flat.png"]
 shape_name = "CubeStatic"
@@ -140,6 +170,11 @@ textures = ["redbrown_support.png"]
 shape_name = "CubeStatic"
 
 [[block]]
+pretty_name = "FC-101_Cn30"
+textures = ["redbrown_flat.png", "redbrown_flat.png", "redbrown_flat.png", "redbrown_chunk.png"]
+shape_name = "CornerSlope"
+
+[[block]]
 pretty_name = "CrM-100"
 textures = ["red_flat.png"]
 shape_name = "CubeStatic"
@@ -153,6 +188,11 @@ shape_name = "CubeStatic"
 pretty_name = "CrM-102"
 textures = ["red_tile.png", "red_tile.png", "red_chunk.png"]
 shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "CrM-101_Cn30"
+textures = ["red_flat.png", "red_flat.png", "red_flat.png", "red_chunk.png"]
+shape_name = "CornerSlope"
 
 [[block]]
 pretty_name = "VO-100"
@@ -174,6 +214,12 @@ pretty_name = "VO-102"
 textures = ["orange_chunk.png"]
 shape_name = "CubeStatic"
 
+
+[[block]]
+pretty_name = "VO-101_Cn30"
+textures = ["orange_flat.png", "orange_flat.png", "orange_flat.png", "orange_tile.png"]
+shape_name = "CornerSlope"
+
 [[block]]
 pretty_name = "AT-100"
 textures = ["purple_tile.png"]
@@ -193,6 +239,11 @@ shape_name = "Slope"
 pretty_name = "AT-104"
 textures = ["purple_grind.png"]
 shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "AT-101_Cn30"
+textures = ["purple_tile.png"]
+shape_name = "CornerSlope"
 
 [[block]]
 pretty_name = "WARN-01"
@@ -243,3 +294,59 @@ shape_name = "CubeStatic"
 pretty_name = "AU-Cy102"
 textures = ["yellow_grey_case.png", "yellow_grey_case.png", "yellow_grey_stripes.png"]
 shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "SK-100"
+textures = ["brightred_tile.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "SK-101"
+textures = ["brightred_core.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "SK-101-45s"
+textures = ["brightred_chunk.png", "brightred_chunk.png", "brightred_tile.png", "brightred_tile.png", "brightred_chunk.png"]
+shape_name = "Slope"
+
+[[block]]
+pretty_name = "SK-102"
+textures = ["brightred_core.png", "brightred_core.png", "brightred_chunk.png"]
+shape_name = "CubeStatic"
+
+
+[[block]]
+pretty_name = "SK-101_Cn30"
+textures = ["brightred_tile.png", "brightred_tile.png", "brightred_tile.png", "brightred_chunk.png"]
+shape_name = "CornerSlope"
+
+[[block]]
+pretty_name = "A_Cf-256v"
+textures = ["purple_circuit.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "A_Cf-256v-45s"
+textures = ["purple_circuit.png", "purple_circuit.png", "purple_circuit_s.png", "purple_circuit_s.png", "purple_circuit.png"]
+shape_name = "Slope"
+
+[[block]]
+pretty_name = "A_Cf-256v-Cn30"
+textures = ["purple_circuit_s.png", "purple_circuit_s.png", "purple_circuit_s.png", "purple_circuit.png"]
+shape_name = "CornerSlope"
+
+[[block]]
+pretty_name = "CRYSTAL+Flx"
+textures = ["purpleswirl_crystal.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "Flx_sb"
+textures = ["purpleswirl_tile.png"]
+shape_name = "CubeStatic"
+
+[[block]]
+pretty_name = "Flx_sb_45s"
+textures = ["purpleswirl_tile.png"]
+shape_name = "Slope"

@@ -180,3 +180,15 @@ pub fn make_slope_shape() -> BlockShape {
     }
 }
 
+pub fn make_corner_shape() -> BlockShape {
+    BlockShape {
+        faces: vec![
+            FaceDef{ obstructed_by: Some(RotFace::MinusY), vertices: vec![ [-0.5, -0.5, -0.5, 0.0, 0.0], [0.5, -0.5, -0.5, 1.0, 0.0], [-0.5, -0.5, 0.5, 0.0, 1.0] ], indices: vec![0,1,2] },
+            FaceDef{ obstructed_by: Some(RotFace::MinusX), vertices: vec![ [-0.5, -0.5, -0.5, 0.0, 0.0], [-0.5, 0.5, -0.5, 1.0, 0.0], [-0.5, -0.5, 0.5, 0.0, 1.0] ], indices: vec![0,2,1] },
+            FaceDef{ obstructed_by: Some(RotFace::MinusZ), vertices: vec![ [-0.5, -0.5, -0.5, 0.0, 0.0], [0.5, -0.5, -0.5, 1.0, 0.0], [-0.5, 0.5, -0.5, 0.0, 1.0] ], indices: vec![0,2,1] },
+            FaceDef{ obstructed_by: None, vertices: vec![ [0.5, -0.5, -0.5, 1.0, 1.0], [-0.5, -0.5, 0.5, 0.0, 1.0], [-0.5, 0.5, -0.5, 0.5, 0.0] ], indices: vec![0,2,1] }
+        ],
+        obstructs: [false; 6],
+        rot_group: rotation_group::RotType::RotVert
+    }
+}
