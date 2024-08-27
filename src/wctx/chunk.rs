@@ -20,7 +20,7 @@ use crate::wctx::block::{
 use crate::wctx::rotation_group;
 
 pub const CHUNK_SIZE: usize = 16;
-pub const WORLD_CHUNKS: usize = 8;
+pub const WORLD_CHUNKS: [usize; 3] = [ 8, 12, 16 ];
 
 #[repr(C)]
 #[derive(Copy, Clone, Serialize, Deserialize)]
@@ -211,11 +211,12 @@ impl<'a> ChunkDrawContext<'a> {
 
 #[derive(Serialize, Deserialize)]
 pub struct ChunkManager {
+    pub size: usize,
     pub data: Array3<Chunk>
 }
 
 impl ChunkManager {
-    pub fn new() -> ChunkManager {
+    pub fn new(size: usize) -> ChunkManager {
         let constr = | loc: (usize, usize, usize) | -> Chunk {
             if loc.1 < 2 {
                 let proto_bi = BlockInstance{
@@ -228,9 +229,10 @@ impl ChunkManager {
                 Chunk::new()
             }
         };
-        let data = Array3::from_shape_fn( (WORLD_CHUNKS, WORLD_CHUNKS, WORLD_CHUNKS), constr );
+        let data = Array3::from_shape_fn( (WORLD_CHUNKS[size], WORLD_CHUNKS[size], WORLD_CHUNKS[size]), constr );
 
         Self{
+            size,
             data
         }
     }
@@ -247,11 +249,11 @@ impl ChunkManager {
         self.data[chunk_index].dirty = true;
         // set adjacent chunks as dirty if needed
         if inner_index.0 == 0 && chunk_index.0 > 0 { self.data[ (chunk_index.0 - 1, chunk_index.1, chunk_index.2) ].dirty = true; }
-        if inner_index.0 == CHUNK_SIZE - 1 && chunk_index.0 < WORLD_CHUNKS - 1 { self.data[ (chunk_index.0 + 1, chunk_index.1, chunk_index.2) ].dirty = true; }
+        if inner_index.0 == CHUNK_SIZE - 1 && chunk_index.0 < WORLD_CHUNKS[self.size] - 1 { self.data[ (chunk_index.0 + 1, chunk_index.1, chunk_index.2) ].dirty = true; }
         if inner_index.1 == 0 && chunk_index.1 > 0 { self.data[ (chunk_index.0, chunk_index.1 - 1, chunk_index.2) ].dirty = true; }
-        if inner_index.1 == CHUNK_SIZE - 1 && chunk_index.1 < WORLD_CHUNKS - 1 { self.data[ (chunk_index.0, chunk_index.1 + 1, chunk_index.2) ].dirty = true; }
+        if inner_index.1 == CHUNK_SIZE - 1 && chunk_index.1 < WORLD_CHUNKS[self.size] - 1 { self.data[ (chunk_index.0, chunk_index.1 + 1, chunk_index.2) ].dirty = true; }
         if inner_index.2 == 0 && chunk_index.2 > 0 { self.data[ (chunk_index.0, chunk_index.1, chunk_index.2 - 1) ].dirty = true; }
-        if inner_index.2 == CHUNK_SIZE - 1 && chunk_index.2 < WORLD_CHUNKS - 1 { self.data[ (chunk_index.0, chunk_index.1, chunk_index.2 + 1) ].dirty = true; }
+        if inner_index.2 == CHUNK_SIZE - 1 && chunk_index.2 < WORLD_CHUNKS[self.size] - 1 { self.data[ (chunk_index.0, chunk_index.1, chunk_index.2 + 1) ].dirty = true; }
 
 
         &mut self.data[chunk_index].data[inner_index]
@@ -272,7 +274,7 @@ impl ChunkManager {
                         cdc.minus_x = Some( (*ptr).data.slice(s![ CHUNK_SIZE - 1, 0..CHUNK_SIZE, 0..CHUNK_SIZE ]) );
                     }
                 }
-                if ch_idx.0 < WORLD_CHUNKS - 1 as usize {
+                if ch_idx.0 < WORLD_CHUNKS[this.size] - 1 as usize {
                     let ptr = this.data.get_ptr( ( ch_idx.0 + 1 as usize, ch_idx.1 as usize, ch_idx.2 as usize ) ).expect("Failed to get chunk pointer!");
                     unsafe {
                         cdc.plus_x = Some( (*ptr).data.slice(s![ 0, 0..CHUNK_SIZE, 0..CHUNK_SIZE ]) );
@@ -285,7 +287,7 @@ impl ChunkManager {
                         cdc.minus_y = Some( (*ptr).data.slice(s![ 0..CHUNK_SIZE, CHUNK_SIZE - 1, 0..CHUNK_SIZE ]) );
                     }
                 }
-                if ch_idx.1 < WORLD_CHUNKS - 1 as usize {
+                if ch_idx.1 < WORLD_CHUNKS[this.size] - 1 as usize {
                     let ptr = this.data.get_ptr( ( ch_idx.0 as usize, ch_idx.1 + 1 as usize, ch_idx.2 as usize ) ).expect("Failed to get chunk pointer!");
                     unsafe {
                         cdc.plus_y = Some( (*ptr).data.slice(s![ 0..CHUNK_SIZE, 0, 0..CHUNK_SIZE ]) );
@@ -298,7 +300,7 @@ impl ChunkManager {
                         cdc.minus_z = Some( (*ptr).data.slice(s![ 0..CHUNK_SIZE, 0..CHUNK_SIZE, CHUNK_SIZE - 1 ]) );
                     }
                 }
-                if ch_idx.2 < WORLD_CHUNKS - 1 as usize {
+                if ch_idx.2 < WORLD_CHUNKS[this.size] - 1 as usize {
                     let ptr = this.data.get_ptr( ( ch_idx.0 as usize, ch_idx.1 as usize, ch_idx.2 + 1 as usize ) ).expect("Failed to get chunk pointer!");
                     unsafe {
                         cdc.plus_z = Some( (*ptr).data.slice(s![ 0..CHUNK_SIZE, 0..CHUNK_SIZE, 0 ]) );
@@ -309,10 +311,10 @@ impl ChunkManager {
                 ch.update_draw_cache(wpos, registry, shape_registry, cdc);
             }
         };
-        for x in 0..WORLD_CHUNKS {
-            for y in 0..WORLD_CHUNKS {
-                for z in 0..WORLD_CHUNKS {
-                    rebuild( self, (x, y, z), (x * CHUNK_SIZE, y * CHUNK_SIZE, z * CHUNK_SIZE) );
+        for x in 0..WORLD_CHUNKS[self.size] {
+            for y in 0..WORLD_CHUNKS[self.size] {
+                for z in 0..WORLD_CHUNKS[self.size] {
+                    rebuild(self, (x, y, z), (x * CHUNK_SIZE, y * CHUNK_SIZE, z * CHUNK_SIZE) );
                 }
             }
         }

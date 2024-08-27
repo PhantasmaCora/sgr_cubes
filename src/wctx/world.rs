@@ -31,8 +31,8 @@ pub struct WorldSavestate {
 }
 
 impl WorldSavestate {
-    pub fn new() -> WorldSavestate {
-        let chunk_manager = crate::wctx::chunk::ChunkManager::new();
+    pub fn new(size: usize) -> WorldSavestate {
+        let chunk_manager = crate::wctx::chunk::ChunkManager::new(size);
         let block_select = 1;
         let camera = camera::Camera::new((63.0, 35.0, 62.0), cgmath::Deg(90.0), cgmath::Deg(-20.0));
 
@@ -41,6 +41,10 @@ impl WorldSavestate {
             block_select,
             camera,
         }
+    }
+
+    pub fn size(&self) -> usize {
+        self.chunk_manager.size
     }
 }
 
@@ -425,7 +429,7 @@ impl WorldRender {
             last = current;
             current = next.1;
             if current.x >= 0 && current.y >= 0 && current.z >= 0 &&
-            current.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && current.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 {
+            current.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS[self.world.size()]) as i32 && current.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS[self.world.size()]) as i32 && current.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS[self.world.size()]) as i32 {
                 let bdef = self.world.chunk_manager.get_block( ( current.x as usize, current.y as usize, current.z as usize ) ).blockdef;
                 if bdef != 0 {
                     run = false;
@@ -444,7 +448,7 @@ impl WorldRender {
             broken.blockdef = 0;
             broken.exparam = 0;
         } else if hit && mouse_pressed.right_just_now && (last.x >= 0 && last.y >= 0 && last.z >= 0 &&
-            last.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && last.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32 && last.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS) as i32) {
+            last.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS[self.world.size()]) as i32 && last.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS[self.world.size()]) as i32 && last.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS[self.world.size()]) as i32) {
             let mut placed = self.world.chunk_manager.get_mut_block( ( last.x as usize, last.y as usize, last.z as usize ) );
             placed.blockdef = self.world.block_select;
             placed.exparam = 0;

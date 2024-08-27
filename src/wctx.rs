@@ -1,4 +1,6 @@
 
+
+use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use std::path::PathBuf;
 use std::io::{
@@ -34,6 +36,7 @@ mod data_loader;
 
 mod ui;
 mod world;
+mod world_loader;
 
 #[derive(Clone, Copy)]
 struct MouseOps {
@@ -54,6 +57,7 @@ struct State<'a> {
     ui_core: ui::UICore,
     ui_mode: ui::UIMode,
     world_render: Option<world::WorldRender>,
+    world_loader: world_loader::WorldLoader,
 }
 
 impl<'a> State<'a> {
@@ -128,11 +132,19 @@ impl<'a> State<'a> {
         let mouse_pressed = MouseOps{left: false, right: false, left_just_now: false, right_just_now: false };
 
 
-        let ui_core = ui::UICore::new(&config.format, &config, &device, &queue,);
+        let mut ui_core = ui::UICore::new(&config.format, &config, &device, &queue,);
         let ui_mode = ui::UIMode::MainTitle;
 
-        let wss = Self::load_world().unwrap_or( world::WorldSavestate::new() );
-        let wr = world::WorldRender::new(&device, &queue, &config, wss);
+        let mut wl = world_loader::WorldLoader {
+            previews: Vec::<world_loader::WorldPreview>::new(),
+            name_map: HashMap::<String, usize>::new(),
+        };
+        let pvs = wl.load_previews( &ui_core.get_gfx(&device, &queue) );
+
+        ui_core.update_world_list( pvs, &config, &device, &queue );
+
+        //let wss = Self::load_world().unwrap_or( world::WorldSavestate::new(0) );
+        //let wr = world::WorldRender::new(&device, &queue, &config, wss);
 
         Self {
             surface,
@@ -144,7 +156,8 @@ impl<'a> State<'a> {
             mouse_pressed,
             ui_core,
             ui_mode,
-            world_render: Some(wr),
+            world_render: None,//Some(wr),
+            world_loader: wl,
         }
     }
 
@@ -356,6 +369,11 @@ impl<'a> State<'a> {
 
     }
 }
+
+
+
+
+
 
 pub async fn run() {
     env_logger::init();

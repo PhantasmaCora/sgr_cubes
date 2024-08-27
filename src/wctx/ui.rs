@@ -25,12 +25,18 @@ use cushy::value::{
     Destination
 };
 
+
+pub mod world_ui;
+
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum UIMode {
     Gameplay,
     PauseMenu,
     QuitGameplay,
+    LoadWorld,
     MainTitle,
+    WorldSelection,
     Quit,
 }
 
@@ -46,20 +52,26 @@ pub struct UICore {
     pause_menu_tex: crate::wctx::texture::Texture,
     pause_bind_group: wgpu::BindGroup,
     pause_buttonmenu: cushy::window::VirtualWindow,
-    pause_buttons_tex: cushy::kludgine::Texture,
+    menu_draw_tex: cushy::kludgine::Texture,
     menu_copy_tex: crate::wctx::texture::Texture,
     menu_copy_bind_group: wgpu::BindGroup,
     ret: Dynamic<bool>,
     quit: Dynamic<bool>,
     main_title: cushy::window::VirtualWindow,
-    main_title_tex: cushy::kludgine::Texture,
     enter: Dynamic<bool>,
     quitout: Dynamic<bool>,
     main_menu_tex: crate::wctx::texture::Texture,
     main_menu_bind_group: wgpu::BindGroup,
+    gen_menu_bind_group: wgpu::BindGroup,
+    world_select_ui: world_ui::WorldSelectUI,
+    world_selected_name: Option<String>,
 }
 
 impl UICore {
+    pub fn get_gfx<'a>(&'a mut self, device: &'a wgpu::Device, queue: &'a wgpu::Queue) -> cushy::kludgine::Graphics<'a> {
+        self.pause_buttonmenu.graphics(device, queue)
+    }
+
     pub fn new(out_format: &wgpu::TextureFormat, config: &wgpu::SurfaceConfiguration, device: &wgpu::Device, queue: &wgpu::Queue, ) -> UICore {
 
         let crosshair_bytes = include_bytes!("../../res/texture/core/crosshair.png");
@@ -358,7 +370,7 @@ impl UICore {
         fs.db_mut().load_font_file(pathb).expect("font failed to load");
         fs.db_mut().set_cursive_family("ZettaStructure");
 
-        let pause_buttons_tex = cushy::kludgine::Texture::multisampled(
+        let menu_draw_tex = cushy::kludgine::Texture::multisampled(
             &pause_buttonmenu.graphics(device, queue),
             4,
             figures::Size{width: UPx::new(config.width), height: UPx::new(config.height)},
@@ -510,15 +522,6 @@ impl UICore {
         fs.db_mut().load_font_file(pathb).expect("font failed to load");
         fs.db_mut().set_cursive_family("MechanicalSansSerifMuji");
 
-        let main_title_tex = cushy::kludgine::Texture::multisampled(
-            &main_title.graphics(device, queue),
-            4,
-            figures::Size{width: UPx::new(config.width), height: UPx::new(config.height)},
-            wgpu::TextureFormat::Rgba8UnormSrgb,
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            wgpu::FilterMode::Nearest
-        );
-
         let main_bytes = include_bytes!("../../res/texture/ui/main_menu_bg.png");
         let main_menu_tex = crate::wctx::texture::Texture::from_bytes(&device, &queue, main_bytes, &"Main Menu Texture").unwrap();
 
@@ -539,6 +542,40 @@ impl UICore {
             }
         );
 
+        let gen_bytes = include_bytes!("../../res/texture/ui/menu_generic_bg.png");
+        let gen_menu_tex = crate::wctx::texture::Texture::from_bytes(&device, &queue, gen_bytes, &"Menu BG Texture").unwrap();
+
+        let gen_menu_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&gen_menu_tex.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&gen_menu_tex.sampler),
+                    }
+                ],
+                label: Some("menu_bind_group"),
+            }
+        );
+
+
+        let test_preview = crate::wctx::world_loader::WorldPreview {
+            path_name: "test".to_string(),
+            name: "Test World".to_string(),
+            size: 0
+        };
+        let world_select_ui = world_ui::WorldSelectUI::new(vec![ (test_preview, cushy::kludgine::Texture::new(
+            &pause_buttonmenu.graphics(device, queue),
+            figures::Size{width: UPx::new(512), height: UPx::new(512)},
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            wgpu::FilterMode::Linear
+        )) ], config, device, queue);
+
         Self{
             crosshair_tex,
             crosshair_bind_group,
@@ -551,24 +588,30 @@ impl UICore {
             pause_menu_tex,
             pause_bind_group,
             pause_buttonmenu,
-            pause_buttons_tex,
+            menu_draw_tex,
             menu_copy_tex,
             menu_copy_bind_group,
             ret,
             quit,
             main_title,
-            main_title_tex,
             enter,
             quitout,
             main_menu_tex,
             main_menu_bind_group,
+            gen_menu_bind_group,
+            world_select_ui,
+            world_selected_name: None,
         }
+    }
+
+    pub fn update_world_list(&mut self, worlds: Vec<(crate::wctx::world_loader::WorldPreview, cushy::kludgine::Texture)>, config: &wgpu::SurfaceConfiguration, device: &wgpu::Device, queue: &wgpu::Queue) {
+        self.world_select_ui = world_ui::WorldSelectUI::new(worlds, config, device, queue);
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.pause_buttonmenu.resize( figures::Size { width: UPx::new(new_size.width), height: UPx::new(new_size.height) }, 1.0, queue );
 
-        self.pause_buttons_tex = cushy::kludgine::Texture::multisampled(
+        self.menu_draw_tex = cushy::kludgine::Texture::multisampled(
             &self.pause_buttonmenu.graphics(device, queue),
             4,
             figures::Size{width: UPx::new(new_size.width), height: UPx::new(new_size.height)},
@@ -615,21 +658,16 @@ impl UICore {
         );
 
         self.main_title.resize( figures::Size { width: UPx::new(new_size.width), height: UPx::new(new_size.height) }, 1.0, queue );
+        self.world_select_ui.screen.resize( figures::Size { width: UPx::new(new_size.width), height: UPx::new(new_size.height) }, 1.0, queue );
 
-        self.main_title_tex = cushy::kludgine::Texture::multisampled(
-            &self.pause_buttonmenu.graphics(device, queue),
-            4,
-            figures::Size{width: UPx::new(new_size.width), height: UPx::new(new_size.height)},
-            wgpu::TextureFormat::Rgba8UnormSrgb,
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            wgpu::FilterMode::Nearest
-        );
+
     }
 
     pub fn cursor_moved(&mut self, mode: UIMode, position: &winit::dpi::PhysicalPosition<f64> ) {
         match mode {
             UIMode::PauseMenu => { self.pause_buttonmenu.cursor_moved(cushy::window::DeviceId::Virtual(0), figures::Point::new( figures::units::Px::new(position.x as i32), figures::units::Px::new(position.y as i32) ) ); }
             UIMode::MainTitle => { self.main_title.cursor_moved(cushy::window::DeviceId::Virtual(0), figures::Point::new( figures::units::Px::new(position.x as i32), figures::units::Px::new(position.y as i32) ) ); }
+            UIMode::WorldSelection => { self.world_select_ui.screen.cursor_moved(cushy::window::DeviceId::Virtual(0), figures::Point::new( figures::units::Px::new(position.x as i32), figures::units::Px::new(position.y as i32) ) ); }
             _ => {}
         }
     }
@@ -651,11 +689,12 @@ impl UICore {
         match mode {
             UIMode::PauseMenu => { self.pause_buttonmenu.mouse_input(cushy::window::DeviceId::Virtual(0), kstate, kbutton); }
             UIMode::MainTitle => { self.main_title.mouse_input(cushy::window::DeviceId::Virtual(0), kstate, kbutton); }
+            UIMode::WorldSelection => { self.world_select_ui.screen.mouse_input(cushy::window::DeviceId::Virtual(0), kstate, kbutton); }
             _ => {}
         }
     }
 
-    pub fn update(&self, mode: UIMode ) -> Option<UIMode> {
+    pub fn update(&mut self, mode: UIMode ) -> Option<UIMode> {
         match mode {
             UIMode::PauseMenu => {
                 if self.ret.get() {
@@ -671,10 +710,22 @@ impl UICore {
             UIMode::MainTitle => {
                 if self.enter.get() {
                     self.enter.set(false);
-                    Some(UIMode::PauseMenu)
+                    Some(UIMode::WorldSelection)
                 } else if self.quitout.get() {
                     self.quitout.set(false);
                     Some(UIMode::Quit)
+                } else {
+                    None
+                }
+            }
+            UIMode::WorldSelection => {
+                if self.world_select_ui.back_to_title.get() {
+                    self.world_select_ui.back_to_title.set(false);
+                    Some(UIMode::MainTitle)
+                } else if self.world_select_ui.load_world.get() != "".to_string() {
+                    self.world_selected_name = Some( self.world_select_ui.load_world.get().clone() );
+                    self.world_select_ui.load_world.set("".to_string());
+                    Some( UIMode::LoadWorld )
                 } else {
                     None
                 }
@@ -823,7 +874,7 @@ impl UICore {
                 // redraw the button menu
                 self.pause_buttonmenu.prepare(device, queue);
                 self.pause_buttonmenu.render_into(
-                    &self.pause_buttons_tex,
+                    &self.menu_draw_tex,
                     wgpu::LoadOp::Clear( cushy::styles::Color::new(0, 0, 0, 0) ),
                     device,
                     queue
@@ -836,7 +887,7 @@ impl UICore {
                 // copy the button menu over
                 encoder.copy_texture_to_texture(
                     wgpu::ImageCopyTexture{
-                        texture: self.pause_buttons_tex.wgpu(),
+                        texture: self.menu_draw_tex.wgpu(),
                         mip_level: 0,
                         origin: wgpu::Origin3d{x: 0, y: 0, z: 0},
                         aspect: wgpu::TextureAspect::All
@@ -919,7 +970,7 @@ impl UICore {
                 // redraw the menu
                 self.main_title.prepare(device, queue);
                 self.main_title.render_into(
-                    &self.main_title_tex,
+                    &self.menu_draw_tex,
                     wgpu::LoadOp::Clear( cushy::styles::Color::new(0, 0, 0, 0) ),
                     device,
                     queue
@@ -932,7 +983,7 @@ impl UICore {
                 // copy the button menu over
                 encoder.copy_texture_to_texture(
                     wgpu::ImageCopyTexture{
-                        texture: self.main_title_tex.wgpu(),
+                        texture: self.menu_draw_tex.wgpu(),
                         mip_level: 0,
                         origin: wgpu::Origin3d{x: 0, y: 0, z: 0},
                         aspect: wgpu::TextureAspect::All
@@ -992,6 +1043,102 @@ impl UICore {
 
                     render_pass.set_pipeline(&self.overlaid_pipeline);
                     render_pass.set_bind_group(0, &self.main_menu_bind_group, &[]);
+                    render_pass.set_bind_group(1, &self.menu_copy_bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass.draw_indexed(0..num_indices, 0, 0..1);
+                }
+
+                Ok(encoder)
+            }
+            UIMode::WorldSelection => {
+                // setup stuff
+                let rw = self.pause_menu_tex.texture.width() as f32 / target_size.0 as f32;
+                let rh = self.pause_menu_tex.texture.height() as f32 / target_size.1 as f32;
+                let mut bgx = 0.5;
+                let mut bgy = 0.5;
+                if rw < rh {
+                    bgy = rw / rh / 2.0;
+                } else {
+                    bgx = rh / rw / 2.0;
+                }
+
+                // redraw the button menu
+                self.world_select_ui.screen.prepare(device, queue);
+                self.world_select_ui.screen.render_into(
+                    &self.menu_draw_tex,
+                    wgpu::LoadOp::Clear( cushy::styles::Color::new(0, 0, 0, 0) ),
+                    device,
+                    queue
+                );
+
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("UI Render Encoder"),
+                });
+
+                // copy the button menu over
+                encoder.copy_texture_to_texture(
+                    wgpu::ImageCopyTexture{
+                        texture: self.menu_draw_tex.wgpu(),
+                        mip_level: 0,
+                        origin: wgpu::Origin3d{x: 0, y: 0, z: 0},
+                        aspect: wgpu::TextureAspect::All
+                    },
+                    wgpu::ImageCopyTexture{
+                        texture: &self.menu_copy_tex.texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d{x: 0, y: 0, z: 0},
+                        aspect: wgpu::TextureAspect::All
+                    },
+                    self.menu_copy_tex.texture.size()
+                );
+
+                // draw the menu bg
+                {
+                    let bg_vertices = vec![
+                        BMVertex{ position: [ -1.0, 1.0 ], uv: [0.5 - bgx, 0.5 - bgy], uv2: [0.0, 0.0] },
+                        BMVertex{ position: [ 1.0, 1.0 ], uv: [0.5 + bgx, 0.5 - bgy], uv2: [1.0, 0.0] },
+                        BMVertex{ position: [ -1.0, -1.0 ], uv: [0.5 - bgx, 0.5 + bgy], uv2: [0.0, 1.0] },
+                        BMVertex{ position: [ 1.0, -1.0 ], uv: [0.5 + bgx, 0.5 + bgy], uv2: [1.0, 1.0] },
+                    ];
+                    let bg_indices: Vec<u16> = vec![
+                        0, 2, 3,
+                        0, 3, 1
+                    ];
+
+                    let vertex_buffer = device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&bg_vertices),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        }
+                    );
+                    let index_buffer = device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Index Buffer"),
+                            contents: bytemuck::cast_slice(&bg_indices),
+                            usage: wgpu::BufferUsages::INDEX,
+                        }
+                    );
+                    let num_indices = bg_indices.len() as u32;
+
+                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Crosshair Draw Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &target_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                    });
+
+                    render_pass.set_pipeline(&self.overlaid_pipeline);
+                    render_pass.set_bind_group(0, &self.gen_menu_bind_group, &[]);
                     render_pass.set_bind_group(1, &self.menu_copy_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
                     render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
@@ -1116,8 +1263,8 @@ impl UICore {
             }
         }
     }
-
 }
+
 
 
 
