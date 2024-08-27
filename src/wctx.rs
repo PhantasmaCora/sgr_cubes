@@ -20,8 +20,6 @@ use winit::{
 
 use wgpu::util::DeviceExt;
 
-use fs_extra::dir::create_all;
-
 mod camera;
 
 mod chunk;
@@ -37,6 +35,7 @@ mod data_loader;
 mod ui;
 mod world;
 mod world_loader;
+mod world_saver;
 
 #[derive(Clone, Copy)]
 struct MouseOps {
@@ -156,7 +155,7 @@ impl<'a> State<'a> {
             mouse_pressed,
             ui_core,
             ui_mode,
-            world_render: None,//Some(wr),
+            world_render: None,
             world_loader: wl,
         }
     }
@@ -261,6 +260,9 @@ impl<'a> State<'a> {
                         self.ui_core.mouse_input( self.ui_mode, state, button );
                         true
                     }
+                    WindowEvent::KeyboardInput{ event, .. } => {
+                        self.ui_core.keyboard_input( self.ui_mode, event.clone() )
+                    }
                     _ => {
                         false
                     }
@@ -277,6 +279,11 @@ impl<'a> State<'a> {
                 .or_else(|_e| self.window.set_cursor_grab(winit::window::CursorGrabMode::Locked));
                 self.window.set_cursor_visible(false);
                 self.ui_mode = ui::UIMode::Gameplay;
+            }
+            ui::UIMode::WorldSelection => {
+                let pvs = self.world_loader.load_previews( &self.ui_core.get_gfx(&self.device, &self.queue) );
+                self.ui_core.update_world_list( pvs, &self.config, &self.device, &self.queue );
+                self.ui_mode = ui::UIMode::WorldSelection;
             }
             _ => {
                 let _ = self.window.set_cursor_grab(winit::window::CursorGrabMode::None);
@@ -299,8 +306,29 @@ impl<'a> State<'a> {
                     wr.update( &self.queue, self.mouse_pressed, dt );
                 }
             }
-            ui::UIMode::PauseMenu => {
+            ui::UIMode::LoadWorld => {
+                if let Some(name) = self.ui_core.world_selected_name.clone() {
+                    self.ui_core.world_selected_name = None;
+                    let pv = &self.world_loader.previews[ *self.world_loader.name_map.get(&name).unwrap() ];
+                    let world_load = pv.load_world();
 
+                    if let Ok(wss) = world_load {
+                        self.world_render = Some( world::WorldRender::new(&self.device, &self.queue, &self.config, wss, name) );
+                        self.ui_mode = ui::UIMode::PauseMenu;
+                    }
+                }
+            }
+            ui::UIMode::QuitGameplay => {
+                let mut worldsaver = world_saver::WorldSaver{};
+                worldsaver.save_world( &self.world_render.as_ref().unwrap(), &self.device, &self.queue );
+                self.world_render = None;
+                self.ui_mode = ui::UIMode::MainTitle;
+            }
+            ui::UIMode::CreateWorld => {
+                let name = self.ui_core.world_selected_name.clone().expect("missing world name!");
+                let wss = world::WorldSavestate::new(0);
+                self.world_render = Some(world::WorldRender::new(&self.device, &self.queue, &self.config, wss, name.clone() ));
+                self.ui_mode = ui::UIMode::PauseMenu;
             }
             _ => {
 
@@ -335,39 +363,7 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    fn load_world() -> Option<world::WorldSavestate> {
-        let pdirs = directories::ProjectDirs::from( "", "PhantasmaCora Games", "SGR_Cubes" ).expect("Failed to get project directories");
-        let mut pbuf = pdirs.data_dir().to_path_buf();
-        pbuf.push( "worlds/world_savestate.pkl" );
 
-        if pbuf.try_exists().expect("Failed to verify game data path") {
-            let mut fi = std::fs::File::open(pbuf).expect("failed to open saved world file");
-            let mut bytes = Vec::<u8>::new();
-            fi.read_to_end(&mut bytes);
-            let deserialized: world::WorldSavestate = serde_pickle::from_slice(&bytes, Default::default()).unwrap();
-
-            Some(deserialized)
-        } else {
-            None
-        }
-    }
-
-    fn save_world(&self) {
-        let pdirs = directories::ProjectDirs::from( "", "PhantasmaCora Games", "SGR_Cubes" ).expect("Failed to get project directories");
-        let mut pbuf = pdirs.data_dir().to_path_buf();
-        pbuf.push( "worlds" );
-
-        create_all( &pbuf, false );
-
-        {
-            pbuf.push("world_savestate.pkl");
-            let mut fi = std::fs::File::create(pbuf).expect("failed to create world file");
-            let serialized = serde_pickle::to_vec(&self.world_render.as_ref().unwrap().world, Default::default()).unwrap();
-            fi.write_all( &serialized ).expect("failed to write world file");
-        }
-
-
-    }
 }
 
 
@@ -416,6 +412,8 @@ pub async fn run() {
                             state.update_ui_mode( ui::UIMode::PauseMenu );
                         } else if state.ui_mode == ui::UIMode::PauseMenu {
                             state.update_ui_mode( ui::UIMode::Gameplay );
+                        } else if state.ui_mode == ui::UIMode::WorldSelection {
+                            state.update_ui_mode( ui::UIMode::MainTitle );
                         }
                     }
                     WindowEvent::Resized(physical_size) => {
@@ -452,10 +450,7 @@ pub async fn run() {
                 }
             }
             Event::AboutToWait => {
-                if state.ui_mode == ui::UIMode::QuitGameplay {
-                    state.save_world();
-                    state.ui_mode = ui::UIMode::MainTitle;
-                } else if state.ui_mode == ui::UIMode::Quit {
+                if state.ui_mode == ui::UIMode::Quit {
                     control_flow.exit();
                 }
 

@@ -17,6 +17,7 @@ use cushy::{
     widgets
 };
 use cushy::widget::MakeWidget;
+use cushy::widgets::input::InputValue;
 use cushy::value::{
     Source,
     Dynamic,
@@ -169,5 +170,74 @@ impl WorldSelectUI {
 
 }
 
+pub struct WorldCreationUI {
+    pub screen: cushy::window::VirtualWindow,
+    pub create_world: cushy::value::Dynamic<bool>,
+    pub world_name: cushy::value::Dynamic<String>,
+    pub cancel: cushy::value::Dynamic<bool>,
+}
 
+impl WorldCreationUI {
+    pub fn new(config: &wgpu::SurfaceConfiguration, device: &wgpu::Device, queue: &wgpu::Queue) -> WorldCreationUI {
+        let world_name = cushy::value::Dynamic::new( "".to_string() );
+        let create_world = cushy::value::Dynamic::new(false);
+        let cancel = cushy::value::Dynamic::new(false);
 
+        let name_input = world_name.clone().into_input().placeholder("World name")
+        .with( &styles::components::CornerRadius, styles::CornerRadii{ top_left: cushy::styles::Dimension::Px(figures::units::Px::new(0)), top_right: cushy::styles::Dimension::Px(figures::units::Px::new(0)), bottom_left: cushy::styles::Dimension::Px(figures::units::Px::new(0)), bottom_right: cushy::styles::Dimension::Px(figures::units::Px::new(0)) } )
+        .with(&styles::components::OutlineColor, styles::Color::new(224,173,83,255))
+        .with(&styles::components::HighlightColor, styles::Color::new(245,204,25,255));
+
+        let mut create_button = widgets::Button::new( widgets::Label::<&str>::new("Create!") );
+        create_button = create_button.kind( widgets::button::ButtonKind::Solid );
+        create_button = create_button.on_click({
+            let go = create_world.clone();
+            move |click| { go.set(true); }
+        });
+
+        let mut back_button = widgets::Button::new( widgets::Label::<&str>::new("Back") );
+        back_button = back_button.kind( widgets::button::ButtonKind::Solid );
+        back_button = back_button.on_click({
+            let back = cancel.clone();
+            move |click| { back.set(true); }
+        });
+
+        let mut list = cushy::widget::WidgetList::new();
+        list.push(name_input);
+        list.push(create_button.with_styles(Self::make_buttonstyles()));
+        list.push(back_button.with_styles(Self::make_buttonstyles()));
+
+        let mut builder = cushy::window::StandaloneWindowBuilder::new( list.into_rows().centered() ).transparent();
+        builder = builder.size( figures::Size { width: config.width, height: config.height } );
+        let mut screen = builder.finish_virtual(device, queue);
+
+        Self {
+            screen,
+            create_world,
+            world_name,
+            cancel,
+        }
+    }
+
+    pub fn make_buttonstyles() -> styles::Styles {
+        let mut buttonstyles = styles::Styles::new();
+
+        buttonstyles.insert( &styles::components::CornerRadius, styles::CornerRadii{ top_left: figures::units::Px::new(0), top_right: figures::units::Px::new(0), bottom_left: figures::units::Px::new(0), bottom_right: figures::units::Px::new(0) } );
+        buttonstyles.insert( &styles::components::OutlineColor, styles::Color::new(0,0,0,0) );
+        buttonstyles.insert( &styles::components::HighlightColor, styles::Color::new(0,0,0,0) );
+
+        buttonstyles.insert( &widgets::button::ButtonOutline, styles::Color::new(224,173,83,255) );
+        buttonstyles.insert( &widgets::button::ButtonHoverOutline, styles::Color::new(245,204,25,255) );
+        buttonstyles.insert( &widgets::button::ButtonDisabledOutline, styles::Color::new(87,73,70,255) );
+        buttonstyles.insert( &widgets::button::ButtonActiveOutline, styles::Color::new(218,123,33,255) );
+
+        buttonstyles.insert( &widgets::button::ButtonBackground, styles::Color::new(0,0,0,0) );
+        buttonstyles.insert( &widgets::button::ButtonHoverBackground, styles::Color::new(0,0,0,0) );
+        buttonstyles.insert( &widgets::button::ButtonDisabledBackground, styles::Color::new(0,0,0,0) );
+        buttonstyles.insert( &widgets::button::ButtonActiveBackground, styles::Color::new(0,0,0,0) );
+
+        buttonstyles.insert( &styles::components::FontFamily, styles::FamilyOwned::SansSerif );
+
+        buttonstyles
+    }
+}

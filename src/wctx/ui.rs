@@ -38,6 +38,8 @@ pub enum UIMode {
     MainTitle,
     WorldSelection,
     Quit,
+    CreateWorldMenu,
+    CreateWorld,
 }
 
 pub struct UICore {
@@ -64,7 +66,8 @@ pub struct UICore {
     main_menu_bind_group: wgpu::BindGroup,
     gen_menu_bind_group: wgpu::BindGroup,
     world_select_ui: world_ui::WorldSelectUI,
-    world_selected_name: Option<String>,
+    pub world_selected_name: Option<String>,
+    world_create_ui: world_ui::WorldCreationUI,
 }
 
 impl UICore {
@@ -576,6 +579,8 @@ impl UICore {
             wgpu::FilterMode::Linear
         )) ], config, device, queue);
 
+        let world_create_ui = world_ui::WorldCreationUI::new(config, device, queue);
+
         Self{
             crosshair_tex,
             crosshair_bind_group,
@@ -601,6 +606,7 @@ impl UICore {
             gen_menu_bind_group,
             world_select_ui,
             world_selected_name: None,
+            world_create_ui,
         }
     }
 
@@ -659,7 +665,7 @@ impl UICore {
 
         self.main_title.resize( figures::Size { width: UPx::new(new_size.width), height: UPx::new(new_size.height) }, 1.0, queue );
         self.world_select_ui.screen.resize( figures::Size { width: UPx::new(new_size.width), height: UPx::new(new_size.height) }, 1.0, queue );
-
+        self.world_create_ui.screen.resize( figures::Size { width: UPx::new(new_size.width), height: UPx::new(new_size.height) }, 1.0, queue );
 
     }
 
@@ -668,6 +674,7 @@ impl UICore {
             UIMode::PauseMenu => { self.pause_buttonmenu.cursor_moved(cushy::window::DeviceId::Virtual(0), figures::Point::new( figures::units::Px::new(position.x as i32), figures::units::Px::new(position.y as i32) ) ); }
             UIMode::MainTitle => { self.main_title.cursor_moved(cushy::window::DeviceId::Virtual(0), figures::Point::new( figures::units::Px::new(position.x as i32), figures::units::Px::new(position.y as i32) ) ); }
             UIMode::WorldSelection => { self.world_select_ui.screen.cursor_moved(cushy::window::DeviceId::Virtual(0), figures::Point::new( figures::units::Px::new(position.x as i32), figures::units::Px::new(position.y as i32) ) ); }
+            UIMode::CreateWorldMenu => { self.world_create_ui.screen.cursor_moved(cushy::window::DeviceId::Virtual(0), figures::Point::new( figures::units::Px::new(position.x as i32), figures::units::Px::new(position.y as i32) ) ); }
             _ => {}
         }
     }
@@ -690,7 +697,38 @@ impl UICore {
             UIMode::PauseMenu => { self.pause_buttonmenu.mouse_input(cushy::window::DeviceId::Virtual(0), kstate, kbutton); }
             UIMode::MainTitle => { self.main_title.mouse_input(cushy::window::DeviceId::Virtual(0), kstate, kbutton); }
             UIMode::WorldSelection => { self.world_select_ui.screen.mouse_input(cushy::window::DeviceId::Virtual(0), kstate, kbutton); }
+            UIMode::CreateWorldMenu => { self.world_create_ui.screen.mouse_input(cushy::window::DeviceId::Virtual(0), kstate, kbutton); }
             _ => {}
+        }
+    }
+
+    pub fn keyboard_input(&mut self, mode: UIMode, event: winit::event::KeyEvent) -> bool {
+        let kstate = match event.state {
+            winit::event::ElementState::Pressed => cushy::kludgine::app::winit::event::ElementState::Pressed,
+            winit::event::ElementState::Released => cushy::kludgine::app::winit::event::ElementState::Released
+        };
+        let k_key = match event.logical_key {
+            winit::keyboard::Key::Character(value) => cushy::kludgine::app::winit::keyboard::Key::Character(value),
+            _ => cushy::kludgine::app::winit::keyboard::Key::Dead(None)
+        };
+        let k_pkey = cushy::kludgine::app::winit::keyboard::PhysicalKey::Unidentified(cushy::kludgine::app::winit::keyboard::NativeKeyCode::Unidentified);
+
+        match mode {
+            UIMode::CreateWorldMenu => {
+                self.world_create_ui.screen.keyboard_input(
+                    cushy::window::DeviceId::Virtual(0),
+                    cushy::window::KeyEvent {
+                        physical_key: k_pkey,
+                        logical_key: k_key,
+                        text: Some( cushy::kludgine::app::winit::keyboard::SmolStr::new( event.text.unwrap() )),
+                        state: kstate,
+                        repeat: event.repeat,
+                        location: cushy::kludgine::app::winit::keyboard::KeyLocation::Standard,
+                    },
+                    true
+                ) == std::ops::ControlFlow::Break(cushy::widget::EventHandled)
+            }
+            _ => {false}
         }
     }
 
@@ -726,6 +764,26 @@ impl UICore {
                     self.world_selected_name = Some( self.world_select_ui.load_world.get().clone() );
                     self.world_select_ui.load_world.set("".to_string());
                     Some( UIMode::LoadWorld )
+                } else if self.world_select_ui.create_world.get() {
+                    self.world_select_ui.create_world.set(false);
+                    Some(UIMode::CreateWorldMenu)
+                } else {
+                    None
+                }
+            }
+            UIMode::CreateWorldMenu => {
+                if self.world_create_ui.create_world.get() && self.world_create_ui.world_name.get() != "".to_string() {
+                    self.world_create_ui.create_world.set(false);
+                    self.world_selected_name = Some(self.world_create_ui.world_name.get().clone());
+                    self.world_create_ui.world_name.set("".to_string());
+                    Some( UIMode::CreateWorld )
+                } else if self.world_create_ui.create_world.get() {
+                    self.world_create_ui.create_world.set(false);
+                    None
+                } else if self.world_create_ui.cancel.get() {
+                    self.world_create_ui.cancel.set(false);
+                    self.world_create_ui.world_name.set("".to_string());
+                    Some( UIMode::WorldSelection )
                 } else {
                     None
                 }
@@ -1053,8 +1111,8 @@ impl UICore {
             }
             UIMode::WorldSelection => {
                 // setup stuff
-                let rw = self.pause_menu_tex.texture.width() as f32 / target_size.0 as f32;
-                let rh = self.pause_menu_tex.texture.height() as f32 / target_size.1 as f32;
+                let rw = self.main_menu_tex.texture.width() as f32 / target_size.0 as f32;
+                let rh = self.main_menu_tex.texture.height() as f32 / target_size.1 as f32;
                 let mut bgx = 0.5;
                 let mut bgy = 0.5;
                 if rw < rh {
@@ -1147,9 +1205,170 @@ impl UICore {
 
                 Ok(encoder)
             }
-            _ => { Ok( device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Empty Encoder"),
-                }) )
+            UIMode::CreateWorldMenu => {
+                // setup stuff
+                let rw = self.main_menu_tex.texture.width() as f32 / target_size.0 as f32;
+                let rh = self.main_menu_tex.texture.height() as f32 / target_size.1 as f32;
+                let mut bgx = 0.5;
+                let mut bgy = 0.5;
+                if rw < rh {
+                    bgy = rw / rh / 2.0;
+                } else {
+                    bgx = rh / rw / 2.0;
+                }
+
+                // redraw the button menu
+                self.world_create_ui.screen.prepare(device, queue);
+                self.world_create_ui.screen.render_into(
+                    &self.menu_draw_tex,
+                    wgpu::LoadOp::Clear( cushy::styles::Color::new(0, 0, 0, 0) ),
+                    device,
+                    queue
+                );
+
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("UI Render Encoder"),
+                });
+
+                // copy the button menu over
+                encoder.copy_texture_to_texture(
+                    wgpu::ImageCopyTexture{
+                        texture: self.menu_draw_tex.wgpu(),
+                        mip_level: 0,
+                        origin: wgpu::Origin3d{x: 0, y: 0, z: 0},
+                        aspect: wgpu::TextureAspect::All
+                    },
+                    wgpu::ImageCopyTexture{
+                        texture: &self.menu_copy_tex.texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d{x: 0, y: 0, z: 0},
+                        aspect: wgpu::TextureAspect::All
+                    },
+                    self.menu_copy_tex.texture.size()
+                );
+
+                // draw the menu bg
+                {
+                    let bg_vertices = vec![
+                        BMVertex{ position: [ -1.0, 1.0 ], uv: [0.5 - bgx, 0.5 - bgy], uv2: [0.0, 0.0] },
+                        BMVertex{ position: [ 1.0, 1.0 ], uv: [0.5 + bgx, 0.5 - bgy], uv2: [1.0, 0.0] },
+                        BMVertex{ position: [ -1.0, -1.0 ], uv: [0.5 - bgx, 0.5 + bgy], uv2: [0.0, 1.0] },
+                        BMVertex{ position: [ 1.0, -1.0 ], uv: [0.5 + bgx, 0.5 + bgy], uv2: [1.0, 1.0] },
+                    ];
+                    let bg_indices: Vec<u16> = vec![
+                        0, 2, 3,
+                        0, 3, 1
+                    ];
+
+                    let vertex_buffer = device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&bg_vertices),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        }
+                    );
+                    let index_buffer = device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Index Buffer"),
+                            contents: bytemuck::cast_slice(&bg_indices),
+                            usage: wgpu::BufferUsages::INDEX,
+                        }
+                    );
+                    let num_indices = bg_indices.len() as u32;
+
+                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Crosshair Draw Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &target_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                    });
+
+                    render_pass.set_pipeline(&self.overlaid_pipeline);
+                    render_pass.set_bind_group(0, &self.gen_menu_bind_group, &[]);
+                    render_pass.set_bind_group(1, &self.menu_copy_bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass.draw_indexed(0..num_indices, 0, 0..1);
+                }
+
+                Ok(encoder)
+            }
+            _ => {
+                // setup stuff
+                let rw = self.main_menu_tex.texture.width() as f32 / target_size.0 as f32;
+                let rh = self.main_menu_tex.texture.height() as f32 / target_size.1 as f32;
+                let mut bgx = 0.5;
+                let mut bgy = 0.5;
+                if rw < rh {
+                    bgy = rw / rh / 2.0;
+                } else {
+                    bgx = rh / rw / 2.0;
+                }
+
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("BG Encoder"),
+                });
+
+                // draw the generic bg
+                {
+                    let bg_vertices = vec![
+                        UIVertex{ position: [ -1.0, 1.0 ], uv: [0.5 - bgx, 0.5 - bgy] },
+                        UIVertex{ position: [ 1.0, 1.0 ], uv: [0.5 + bgx, 0.5 - bgy] },
+                        UIVertex{ position: [ -1.0, -1.0 ], uv: [0.5 - bgx, 0.5 + bgy] },
+                        UIVertex{ position: [ 1.0, -1.0 ], uv: [0.5 + bgx, 0.5 + bgy] },
+                    ];
+                    let bg_indices: Vec<u16> = vec![
+                        0, 2, 3,
+                        0, 3, 1
+                    ];
+
+                    let vertex_buffer = device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&bg_vertices),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        }
+                    );
+                    let index_buffer = device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Index Buffer"),
+                            contents: bytemuck::cast_slice(&bg_indices),
+                            usage: wgpu::BufferUsages::INDEX,
+                        }
+                    );
+                    let num_indices = bg_indices.len() as u32;
+
+                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Crosshair Draw Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &target_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                    });
+
+                    render_pass.set_pipeline(&self.generic_pipeline);
+                    render_pass.set_bind_group(0, &self.gen_menu_bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass.draw_indexed(0..num_indices, 0, 0..1);
+                }
+
+                Ok(encoder)
             }
 
         }

@@ -52,6 +52,7 @@ impl WorldSavestate {
 // resources used to render the game world
 pub struct WorldRender {
     pub world: WorldSavestate,
+    pub world_name: String,
     pub render_pipeline: wgpu::RenderPipeline,
     projection: camera::Projection,
     pub camera_controller: camera::CameraController,
@@ -73,7 +74,7 @@ pub struct WorldRender {
 }
 
 impl WorldRender {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration, world: WorldSavestate) -> WorldRender {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration, world: WorldSavestate, world_name: String) -> WorldRender {
 
         let mut dl = crate::wctx::data_loader::BlockLoader::create(&device, &queue);
         let _ = dl.submit_blockshape_direct( crate::wctx::block::make_cube_shape(), &"CubeStatic".into() );
@@ -353,6 +354,7 @@ impl WorldRender {
 
         Self{
             world,
+            world_name,
             block_registry,
             block_atlas,
             shape_registry,
@@ -619,6 +621,96 @@ impl WorldRender {
 
         Ok(encoder)
     }
+
+    pub fn draw_custom_view(&self, cam_matrix: [[f32; 4]; 4], device: &wgpu::Device, queue: &wgpu::Queue, out: &crate::wctx::texture::Texture) {
+        let draw_chunk_list = self.world.chunk_manager.get_render_chunks();
+
+        let cu = CameraUniform{
+            view_proj: cam_matrix
+        };
+
+        let camera_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Camera Buffer"),
+                contents: bytemuck::cast_slice(&[cu]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            }
+        );
+
+        let cam_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.camera_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: camera_buffer.as_entire_binding(),
+                }
+            ],
+            label: Some("camera_bind_group"),
+        });
+
+        let dt = crate::wctx::texture::Texture::create_sized_depth_texture( device, wgpu::Extent3d{width: out.texture.width(), height: out.texture.height(), depth_or_array_layers: 1 }, &"Depth Texture" );
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
+        });
+
+        let mut first = true;
+
+        for idx in 0..draw_chunk_list.len() {
+            let c = &draw_chunk_list[idx];
+
+            let vertex_buffer = device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&c.vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                }
+            );
+            let index_buffer = device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: bytemuck::cast_slice(&c.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                }
+            );
+            let num_indices = c.indices.len() as u32;
+
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &out.view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &dt.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: if first {wgpu::LoadOp::Clear(1.0)} else {wgpu::LoadOp::Load},
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            first = false;
+
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &cam_bg, &[]);
+            render_pass.set_bind_group(1, &self.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.colormap_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..num_indices, 0, 0..1);
+        }
+
+        queue.submit( std::iter::once(encoder.finish()) );
+    }
+
+
 }
 
 
