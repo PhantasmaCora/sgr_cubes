@@ -327,7 +327,9 @@ impl<'a> State<'a> {
             ui::UIMode::CreateWorld => {
                 let name = self.ui_core.world_selected_name.clone().expect("missing world name!");
                 let wss = world::WorldSavestate::new(0);
-                self.world_render = Some(world::WorldRender::new(&self.device, &self.queue, &self.config, wss, name.clone() ));
+                let mut wr = world::WorldRender::new(&self.device, &self.queue, &self.config, wss, name.clone() );
+                wr.update_chunks();
+                self.world_render = Some(wr);
                 self.ui_mode = ui::UIMode::PauseMenu;
             }
             _ => {

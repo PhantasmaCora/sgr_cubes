@@ -58,14 +58,14 @@ impl WorldSaver {
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
                     view_formats: &[],
                 },
                 wgpu::TextureViewDimension::D2
             ).expect("failed to create texture");
 
-            world_render.draw_custom_view( ( cgmath::Matrix4::from_translation( cgmath::Vector3::new( 0.0, 0.0, 0.5 ) ) * cgmath::Matrix4::from_nonuniform_scale(0.5, 0.5, 0.1) * cgmath::Matrix4::from_angle_x( cgmath::Rad::atan( 2.0_f32.sqrt() / 2.0 ) ) * cgmath::Matrix4::from_angle_y( cgmath::Rad::full_turn() / -8.0 ) * cgmath::Matrix4::from_translation( cgmath::Vector3::new( -0.5, -1.0, -0.5 ) ) * cgmath::Matrix4::from_scale( 2.0 * DRAW_WORLD_SCALE[world_render.world.chunk_manager.size] ) ).into(), device, queue, &tex );
+            world_render.draw_custom_view( ( cgmath::Matrix4::from_translation( cgmath::Vector3::new( 0.0, 0.3, 0.5 ) ) * cgmath::Matrix4::from_nonuniform_scale(1.0, 1.0, -0.1) * cgmath::Matrix4::from_angle_x( cgmath::Rad::atan( 2.0_f32.sqrt() / 2.0 ) ) * cgmath::Matrix4::from_angle_y( cgmath::Rad::full_turn() / -8.0 ) * cgmath::Matrix4::from_translation( cgmath::Vector3::new( -0.5, -1.0, -0.5 ) ) * cgmath::Matrix4::from_scale( DRAW_WORLD_SCALE[world_render.world.chunk_manager.size] ) ).into(), device, queue, &tex );
 
             let buffer = device.create_buffer(
                 &wgpu::BufferDescriptor {

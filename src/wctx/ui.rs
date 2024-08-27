@@ -709,9 +709,18 @@ impl UICore {
         };
         let k_key = match event.logical_key {
             winit::keyboard::Key::Character(value) => cushy::kludgine::app::winit::keyboard::Key::Character(value),
+            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Backspace) => cushy::kludgine::app::winit::keyboard::Key::Named(cushy::kludgine::app::winit::keyboard::NamedKey::Backspace),
+            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Delete) => cushy::kludgine::app::winit::keyboard::Key::Named(cushy::kludgine::app::winit::keyboard::NamedKey::Delete),
+            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Shift) => cushy::kludgine::app::winit::keyboard::Key::Named(cushy::kludgine::app::winit::keyboard::NamedKey::Shift),
+            winit::keyboard::Key::Named(winit::keyboard::NamedKey::CapsLock) => cushy::kludgine::app::winit::keyboard::Key::Named(cushy::kludgine::app::winit::keyboard::NamedKey::CapsLock),
             _ => cushy::kludgine::app::winit::keyboard::Key::Dead(None)
         };
         let k_pkey = cushy::kludgine::app::winit::keyboard::PhysicalKey::Unidentified(cushy::kludgine::app::winit::keyboard::NativeKeyCode::Unidentified);
+
+        let ktex = match event.text {
+            Some(string) => Some( cushy::kludgine::app::winit::keyboard::SmolStr::new( string )),
+            None => None
+        };
 
         match mode {
             UIMode::CreateWorldMenu => {
@@ -720,7 +729,7 @@ impl UICore {
                     cushy::window::KeyEvent {
                         physical_key: k_pkey,
                         logical_key: k_key,
-                        text: Some( cushy::kludgine::app::winit::keyboard::SmolStr::new( event.text.unwrap() )),
+                        text: ktex,
                         state: kstate,
                         repeat: event.repeat,
                         location: cushy::kludgine::app::winit::keyboard::KeyLocation::Standard,
