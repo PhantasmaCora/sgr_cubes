@@ -97,6 +97,8 @@ impl Chunk {
     pub fn create_bdc(&self, pos: (usize, usize, usize), registry: &BlockRegistry, shape_registry: &BlockShapeRegistry, cdc: &ChunkDrawContext) -> BlockDrawContext {
         let mut out = [false; 6];
 
+        let mut adjacents = [BlockInstance{blockdef: 0, exparam: 0, light: 0}; 6];
+
         for idx in 0..6 {
             let v = rotation_group::rf_to_vector( rotation_group::num_to_rf(idx).unwrap() );
             let opos = ( pos.0 as i32 + v.x as i32, pos.1 as i32 + v.y as i32, pos.2 as i32 + v.z as i32 );
@@ -135,6 +137,8 @@ impl Chunk {
                 bi = self.data[ (opos.0 as usize, opos.1 as usize, opos.2 as usize) ];
             }
 
+            adjacents[idx as usize] = bi;
+
             let bdef = registry.get(bi.blockdef).unwrap();
             if !bdef.transparent {
                 let sdef = shape_registry.get(bdef.shape_id).unwrap();
@@ -142,9 +146,61 @@ impl Chunk {
             }
         }
 
-        BlockDrawContext {
-            obstructions: out
+        let mut ao = [0.0; 8];
+
+        for idx in 0..8 {
+            let vec = rotation_group::rv_to_vector( rotation_group::num_to_rv(idx).unwrap() );
+            let mut value = 0.0;
+
+            if vec.x <= 0.0 {
+                let bi = adjacents[5 as usize];
+                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(1.0, vec.y, vec.z) ).unwrap();
+                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
+            } else {
+                let bi = adjacents[4 as usize];
+                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(-1.0, vec.y, vec.z) ).unwrap();
+                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
+            }
+
+            if vec.y <= 0.0 {
+                let bi = adjacents[3 as usize];
+                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(vec.x, 1.0, vec.z) ).unwrap();
+                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
+            } else {
+                let bi = adjacents[2 as usize];
+                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(vec.x, -1.0, vec.z) ).unwrap();
+                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
+            }
+
+            if vec.z <= 0.0 {
+                let bi = adjacents[1 as usize];
+                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(vec.x, vec.y, 1.0) ).unwrap();
+                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
+            } else {
+                let bi = adjacents[0 as usize];
+                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(vec.x, vec.y, -1.0) ).unwrap();
+                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
+            }
+
+            ao[idx as usize] = value;
         }
+
+        BlockDrawContext {
+            obstructions: out,
+            aos: ao
+        }
+    }
+
+    fn help_ao_query(registry: &BlockRegistry, shape_registry: &BlockShapeRegistry, instance: BlockInstance, corner: rotation_group::RotVert) -> f32 {
+        if instance.blockdef == 0 {
+            return 0.0;
+        }
+        let bdef = registry.get(instance.blockdef).unwrap();
+        if bdef.transparent {
+            return 0.0;
+        }
+        let sdef = shape_registry.get(bdef.shape_id).unwrap();
+        sdef.get_ao(instance.exparam, corner)
     }
 
 }
@@ -177,12 +233,14 @@ impl ChunkDrawCache {
 
 pub struct BlockDrawContext {
     pub obstructions: [bool; 6],
+    pub aos: [f32; 8],
 }
 
 impl Default for BlockDrawContext {
     fn default() -> BlockDrawContext {
         Self {
-            obstructions: [false; 6]
+            obstructions: [false; 6],
+            aos: [0.0; 8]
         }
     }
 }

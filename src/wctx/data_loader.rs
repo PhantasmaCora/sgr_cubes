@@ -40,7 +40,7 @@ impl BlockLoader {
     pub fn create(device: &wgpu::Device, queue: &wgpu::Queue) -> BlockLoader {
         let block_registry = crate::wctx::block::BlockRegistry::new();
         let block_names = HashMap::<String, u32>::new();
-        let texture_atlas = crate::wctx::atlas_tex::AtlasTexture::new(&device, &queue, wgpu::TextureFormat::R8Uint, (16, 16));
+        let texture_atlas = crate::wctx::atlas_tex::AtlasTexture::new(&device, &queue, wgpu::TextureFormat::R8Uint, (32, 32));
         let texture_names = HashMap::<String, u32>::new();
         let shape_registry = crate::wctx::block::BlockShapeRegistry::new();
         let shape_names = HashMap::<String, u32>::new();

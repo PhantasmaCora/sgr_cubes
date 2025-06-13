@@ -20,6 +20,7 @@ pub struct Block {
     pub textures: Vec<u32>,
     pub pretty_name: String,
     pub transparent: bool,
+    pub light: u8,
 }
 
 pub struct BlockRegistry {
@@ -29,7 +30,7 @@ pub struct BlockRegistry {
 impl BlockRegistry {
     pub fn new() -> BlockRegistry {
         // Always create the air block at position zero!
-        let air = Block { registry_id: 0, shape_id: 0, pretty_name: "Air".into(), transparent: true, textures: vec![0] };
+        let air = Block { registry_id: 0, shape_id: 0, pretty_name: "Air".into(), transparent: true, textures: vec![0], light: 0 };
         let mut blocks = Vec::<Block>::new();
         blocks.push(air);
 
@@ -40,7 +41,8 @@ impl BlockRegistry {
 
     pub fn add(&mut self, shape_id: u32, pretty_name: String, textures: Vec<u32>, transparent: bool ) -> u16 {
         let registry_id = self.blocks.len() as u16;
-        self.blocks.push( Block { registry_id, shape_id, pretty_name, textures, transparent } );
+        let light = 0;
+        self.blocks.push( Block { registry_id, shape_id, pretty_name, textures, transparent, light } );
         registry_id
     }
 
@@ -56,6 +58,7 @@ impl BlockRegistry {
 pub struct BlockShape {
     faces: Vec<FaceDef>,
     obstructs: [bool; 6],
+    ao: [f32; 8],
     rot_group: rotation_group::RotType
 }
 
@@ -93,7 +96,12 @@ impl BlockShape {
                 let tex_index = blockdef.textures[ min( f, blockdef.textures.len() - 1 ) ];
                 let mut vec = cgmath::Vector3::new( vertdef[0], vertdef[1], vertdef[2] );
                 vec = quat * vec;
-                vertex_buffer.push( Vertex::new( [ world_pos.0 as f32 + center.x + vec.x, world_pos.1 as f32 + center.y + vec.y, world_pos.2 as f32 + center.z + vec.z ], [vertdef[3], vertdef[4]], tex_index, 1.0) );
+
+                let mut light = 1.0;
+                // rewrite this eventually???
+                light -= bdc.aos[ rotation_group::rv_to_num( rotation_group::vector_to_rv_permissive( vec ) ) ];
+
+                vertex_buffer.push( Vertex::new( [ world_pos.0 as f32 + center.x + vec.x, world_pos.1 as f32 + center.y + vec.y, world_pos.2 as f32 + center.z + vec.z ], [vertdef[3], vertdef[4]], tex_index, light) );
             }
 
             for ind in face.indices.iter() {
@@ -119,6 +127,24 @@ impl BlockShape {
             _ => {}
         }
         self.obstructs[ rotation_group::rf_to_num( rotation_group::vector_to_rf( quat.invert() * rotation_group::rf_to_vector(dir) ).expect("Error! failed to convert vector to rf") ) as usize ]
+    }
+
+    pub fn get_ao(&self, exparam: u8, dir: rotation_group::RotVert) -> f32 {
+        let mut quat = cgmath::Quaternion::<f32>::one();
+        match self.rot_group {
+            rotation_group::RotType::RotFace => {
+                quat = rotation_group::generate_quat_from_rf( rotation_group::num_to_rf( exparam & 0b0000_0111 ).unwrap() );
+            },
+            rotation_group::RotType::RotVert => {
+                quat = rotation_group::generate_quat_from_rv( rotation_group::num_to_rv( exparam & 0b0000_0111 ).unwrap() );
+            },
+            rotation_group::RotType::RotEdge => {
+                quat = rotation_group::generate_quat_from_re( rotation_group::num_to_re( exparam & 0b0000_1111 ).unwrap() );
+            },
+            rotation_group::RotType::Static => {},
+            _ => {}
+        }
+        self.ao[ rotation_group::rv_to_num( rotation_group::vector_to_rv( quat.invert() * rotation_group::rv_to_vector(dir) ).expect("Error! failed to convert vector to rf") ) as usize ]
     }
 
 }
@@ -162,6 +188,7 @@ pub fn make_cube_shape() -> BlockShape {
             FaceDef{ obstructed_by: Some(RotFace::MinusX), vertices: vec![ [ -0.5, 0.5, 0.5, 0.0, 0.0 ], [ -0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ -0.5, -0.5, -0.5, 1.0, 1.0 ] ] , indices: vec![ 0, 1, 2, 1, 3, 2 ] },
         ],
         obstructs: [true; 6],
+        ao: [1.0; 8],
         rot_group: rotation_group::RotType::Static
     }
 }
@@ -176,6 +203,7 @@ pub fn make_slope_shape() -> BlockShape {
             FaceDef{ obstructed_by: None, vertices: vec![ [ -0.5, 0.5, -0.5, 0.0, 0.0 ], [ 0.5, 0.5, -0.5, 1.0, 0.0 ], [ -0.5, -0.5, 0.5, 0.0, 1.0 ], [ 0.5, -0.5, 0.5, 1.0, 1.0 ] ], indices: vec![ 0, 2, 1, 1, 2, 3 ] },
         ],
         obstructs: [ false, true, false, true, false, false ],
+        ao: [1.0, 0.5, 0.5, 0.0, 1.0, 0.5, 0.5, 0.0],
         rot_group: rotation_group::RotType::RotEdge
     }
 }
@@ -189,6 +217,7 @@ pub fn make_corner_shape() -> BlockShape {
             FaceDef{ obstructed_by: None, vertices: vec![ [0.5, -0.5, -0.5, 1.0, 1.0], [-0.5, -0.5, 0.5, 0.0, 1.0], [-0.5, 0.5, -0.5, 0.5, 0.0] ], indices: vec![0,2,1] }
         ],
         obstructs: [false; 6],
+        ao: [1.0, 0.3, 0.3, 0.3, 0.0, 0.0, 0.0, 0.0],
         rot_group: rotation_group::RotType::RotVert
     }
 }

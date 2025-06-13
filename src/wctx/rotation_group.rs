@@ -135,6 +135,19 @@ pub fn num_to_rv(num: u8) -> Option<RotVert> {
     }
 }
 
+pub fn rv_to_num(rv: RotVert) -> usize {
+    match rv {
+        RotVert::XmYmZm => 0,
+        RotVert::XmYmZp => 1,
+        RotVert::XmYpZm => 2,
+        RotVert::XmYpZp => 3,
+        RotVert::XpYmZm => 4,
+        RotVert::XpYmZp => 5,
+        RotVert::XpYpZm => 6,
+        RotVert::XpYpZp => 7
+    }
+}
+
 pub fn rv_to_vector(rv: RotVert) -> Vector3<f32> {
     match rv {
         RotVert::XmYmZm => Vector3::<f32>::new( -1.0, -1.0, -1.0 ),
@@ -160,6 +173,24 @@ pub fn vector_to_rv( vect: Vector3<f32> ) -> Option<RotVert> {
         (1.0, 1.0, -1.0) => Some(RotVert::XpYpZm),
         (1.0, 1.0, 1.0) => Some(RotVert::XpYpZp),
         _ => None
+    }
+}
+
+pub fn vector_to_rv_permissive( vect: Vector3<f32> ) -> RotVert {
+    let x = vect.x > 0.0;
+    let y = vect.y > 0.0;
+    let z = vect.z > 0.0;
+    let tup = (x, y, z);
+    match tup {
+        (false, false, false) => RotVert::XmYmZm,
+        (false, false, true) => RotVert::XmYmZp,
+        (false, true, false) => RotVert::XmYpZm,
+        (false, true, true) => RotVert::XmYpZp,
+        (true, false, false) => RotVert::XpYmZm,
+        (true, false, true) => RotVert::XpYmZp,
+        (true, true, false) => RotVert::XpYpZm,
+        (true, true, true) => RotVert::XpYpZp,
+        _ => RotVert::XmYmZm
     }
 }
 

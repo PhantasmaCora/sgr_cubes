@@ -49,6 +49,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if (color.r == 255) {
         return vec4<f32>(0.0, 0.0, 0.0, 0.0);
     }
-    let light_row: u32 = 7 - u32( floor( in.light * 7.0 + 0.5 ) );
+    let light_row: u32 = 7 - u32( floor( in.light * 7.0 + 0.1 ) );
+    //return vec4<f32>(in.light, in.light, in.light, 0);
     return textureLoad( t_lightmap, vec2<u32>( color.r, light_row ), 0 );
 }
