@@ -1,0 +1,11 @@
+
+
+two kinds of blocks
+
+ - static_shape
+ - adjacency_shape
+
+static shape is easier
+just store its model - sections for each facing
+
+adjacency shape requires partwise work

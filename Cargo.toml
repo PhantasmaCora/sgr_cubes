@@ -27,6 +27,7 @@ figures = "0.4.0"
 serde-pickle = "1.1.1"
 directories = "5.0.1"
 fs_extra = "1.2"
+tobj = "4.0.3"
 
 [dependencies.image]
 version = "0.24"
