@@ -29,6 +29,7 @@ pub struct BlockLoader {
     pub block_registry: crate::wctx::block::BlockRegistry,
     block_names: HashMap<String, u32>,
     pub texture_atlas: crate::wctx::atlas_tex::AtlasTexture,
+    pub normal_tex_atlas: crate::wctx::atlas_tex::AtlasTexture,
     texture_names: HashMap<String, u32>,
     pub shape_registry: crate::wctx::block::BlockShapeRegistry,
     shape_names: HashMap<String, u32>,

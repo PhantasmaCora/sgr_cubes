@@ -9,3 +9,11 @@ static shape is easier
 just store its model - sections for each facing
 
 adjacency shape requires partwise work
+
+
+
+
+
+or do we just use normal maps?
+
+impl normal maps first! with plans to go for full meshes later (?)
