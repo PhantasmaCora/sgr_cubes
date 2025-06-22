@@ -1,60 +1,14 @@
 
 [[block]]
-pretty_name = "ST-100"
-textures = ["steelgray_panel.png"]
-shape_name = "CubeStatic"
+pretty_name = "SP-100"
+mesh = "plate.ply"
+rot_group = "Static"
+lod_mesh = "cube.ply"
+solid = true
 
 [[block]]
-pretty_name = "ST-100-45s"
-textures = ["steelgray_panel.png"]
-shape_name = "Slope"
-
-[[block]]
-pretty_name = "ST-101"
-textures = ["steelgray_panel.png"]
-shape_name = "CubeStatic"
-
-[[block]]
-pretty_name = "ST-102"
-textures = ["steelgray_panel.png", "steelgray_panel.png", "steelgray_slabs.png"]
-shape_name = "CubeStatic"
-
-[[block]]
-pretty_name = "ST-103_SUPRT"
-textures = ["steelgray_support.png"]
-shape_name = "CubeStatic"
-
-[[block]]
-pretty_name = "ST-100_Cn30"
-textures = ["steelgray_panel.png"]
-shape_name = "CornerSlope"
-
-[[block]]
-pretty_name = "RF-100"
-textures = ["red_panel.png"]
-shape_name = "CubeStatic"
-
-[[block]]
-pretty_name = "RF-100-45s"
-textures = ["red_panel.png"]
-shape_name = "Slope"
-
-[[block]]
-pretty_name = "RF-101"
-textures = ["red_panel.png"]
-shape_name = "CubeStatic"
-
-[[block]]
-pretty_name = "RF-102"
-textures = ["red_panel.png", "red_panel.png", "red_slabs.png"]
-shape_name = "CubeStatic"
-
-[[block]]
-pretty_name = "RF-103_SUPRT"
-textures = ["red_support.png"]
-shape_name = "CubeStatic"
-
-[[block]]
-pretty_name = "red-100_Cn30"
-textures = ["red_panel.png"]
-shape_name = "CornerSlope"
+pretty_name = "SP-101"
+mesh = "plate_bolts.ply"
+rot_group = "Static"
+lod_mesh = "cube.ply"
+solid = true

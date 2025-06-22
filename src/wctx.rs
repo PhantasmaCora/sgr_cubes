@@ -27,9 +27,13 @@ mod chunk;
 mod texture;
 mod atlas_tex;
 
-mod block;
+mod blockmesh;
+mod blockdef;
 mod rotation_group;
 
+mod light;
+
+mod registry;
 mod data_loader;
 
 mod ui;
@@ -215,9 +219,8 @@ impl<'a> State<'a> {
                                         ui::WieldItem::Block(wr.world.block_select),
                                         &self.device,
                                         &self.queue,
-                                        &wr.block_registry,
-                                        &wr.shape_registry,
-                                        Some( ( &wr.render_pipeline, &wr.camera_bind_group_layout, &wr.diffuse_bind_group, &wr.colormap_bind_group ) ),
+                                        &wr.mesh_registry,
+                                        Some( ( &wr.output_pipeline, &wr.camera_bind_group_layout ) ),
                                     );
                                 }
                             }

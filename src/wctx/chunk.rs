@@ -1,8 +1,8 @@
 
+use std::cmp::max;
+
 use ndarray::{
-    Array3,
-    ArrayView2,
-    s
+    Array3
 };
 
 use serde::{
@@ -10,80 +10,114 @@ use serde::{
     Deserialize
 };
 
-use crate::wctx::world::Vertex;
-
-use crate::wctx::block::{
-    BlockRegistry,
-    BlockShapeRegistry
+use crate::wctx::blockmesh::{
+    BlockMesh,
+    BlockVertex
 };
+use crate::wctx::blockdef::BlockDef;
+use crate::wctx::registry::Registry;
 
 use crate::wctx::rotation_group;
+
+use cgmath::{
+    Vector3,
+    Point3,
+    InnerSpace
+};
 
 pub const CHUNK_SIZE: usize = 16;
 pub const WORLD_CHUNKS: [usize; 3] = [ 8, 12, 16 ];
 
-#[repr(C)]
-#[derive(Copy, Clone, Serialize, Deserialize)]
-pub struct BlockInstance {
-    pub blockdef: u16,
-    pub exparam: u8,
-    pub light: u8
-}
-
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Chunk {
-    pub data: Array3<BlockInstance>,
+    pub data: Array3<BlockDef>,
     #[serde(skip_serializing)]
     #[serde(default = "get_a_true")]
     pub dirty: bool,
     #[serde(skip)]
-    pub draw_cache: ChunkDrawCache
+    pub draw_cache: ChunkDrawCache,
+    #[serde(skip)]
+    pub low_draw_cache: ChunkDrawCache
 }
 fn get_a_true() -> bool {
     true
 }
 
-
 impl Chunk {
     pub fn new() -> Chunk {
-        let proto_bi = BlockInstance{
-            blockdef: 0,
+        let proto_bd = BlockDef{
+            blockmesh: 0,
             exparam: 0,
-            light: 255,
         };
-        Self::from_blockinstance(proto_bi)
+        Self::from_blockdef(proto_bd)
     }
 
-    pub fn from_blockinstance( bi: BlockInstance ) -> Chunk {
-        let data = Array3::from_elem((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), bi);
+    pub fn from_blockdef( bd: BlockDef ) -> Chunk {
+        let data = Array3::from_elem((CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE), bd);
         let dirty = true;
-        let draw_cache = ChunkDrawCache{ vertices: Vec::<Vertex>::new(), indices: Vec::<u16>::new() };
+        let draw_cache = ChunkDrawCache::default();
+        let low_draw_cache = ChunkDrawCache::default();
 
         Self {
             data,
             dirty,
-            draw_cache
+            draw_cache,
+            low_draw_cache
         }
     }
 
-    pub fn update_draw_cache(&mut self, world_pos: (usize, usize, usize), registry: &BlockRegistry, shape_registry: &BlockShapeRegistry, cdc: ChunkDrawContext) {
-        let mut tverts = Vec::<Vertex>::new();
-        let mut tinds = Vec::<u16>::new();
+    fn is_solid(&self, pos: [usize; 3], registry: &Registry<BlockMesh> ) -> bool {
+        registry.get( self.data[pos].blockmesh ).unwrap().solid
+    }
 
-        let mut iiter = self.data.indexed_iter();
+    pub fn update_draw_cache( &mut self, mesh_registry: &Registry<BlockMesh>, worldpos: (usize, usize, usize) ) {
+        //println!("updating chunk at {:?}", worldpos);
+
+        let mut tverts = Vec::<BlockVertex>::new();
+        let mut tinds = Vec::<u32>::new();
+
+        let mut lowtverts = Vec::<BlockVertex>::new();
+        let mut lowtinds = Vec::<u32>::new();
+
+        let mut idxs = Vec::<[usize; 3]>::new();
+
+        for x in 0..CHUNK_SIZE {
+            for y in 0..CHUNK_SIZE {
+                for z in 0..CHUNK_SIZE {
+                    if x < 1 || x >= CHUNK_SIZE - 1 || y < 1 || y >= CHUNK_SIZE - 1 || z < 1 || z >= CHUNK_SIZE - 1 {
+                        idxs.push( [x,y,z] );
+                    } else if self.is_solid([x-1, y, z], mesh_registry) && self.is_solid([x+1, y, z], mesh_registry) &&
+                        self.is_solid([x, y-1, z], mesh_registry) && self.is_solid([x, y+1, z], mesh_registry) &&
+                        self.is_solid([x, y, z-1], mesh_registry) && self.is_solid([x, y, z+1], mesh_registry) {
+
+                    } else {
+                        idxs.push( [x,y,z] );
+                    }
+                }
+            }
+        }
+
+
+        let mut iiter = idxs.iter();
 
         // iterate over blockinstances in the chunk until done.
-        while let Some(tup) = iiter.next() {
-            let pos = tup.0;
-            let bi = tup.1;
+        while let Some(idx) = iiter.next() {
+            let pos = idx;
+            let bi = &self.data[*idx];
 
-            if bi.blockdef == 0 {
+            if bi.blockmesh == 0 {
                 continue;
             }
 
-            if let Some(bdef) = registry.get(bi.blockdef) {
-                let bdc = self.create_bdc( pos, registry, shape_registry, &cdc );
-                shape_registry.get(bdef.shape_id).unwrap().generate_draw_buffers( &mut tverts, &mut tinds, &bdef, bi.exparam, bdc, world_pos, pos);
+            if let Some(bmesh) = mesh_registry.get(bi.blockmesh) {
+                let (mut newverts, mut newinds) = bmesh.generate_verts(false, bi, (pos[0] as u32 + worldpos.0 as u32, pos[1] as u32 + worldpos.1 as u32, pos[2] as u32 + worldpos.2 as u32), tverts.len() as u32 );
+                tverts.append(&mut newverts);
+                tinds.append(&mut newinds);
+
+                (newverts, newinds) = bmesh.generate_verts(true, bi, (pos[0] as u32 + worldpos.0 as u32, pos[1] as u32 + worldpos.1 as u32, pos[2] as u32 + worldpos.2 as u32), lowtverts.len() as u32 );
+
+                lowtverts.append(&mut newverts);
+                lowtinds.append(&mut newinds);
             }
         }
 
@@ -91,136 +125,24 @@ impl Chunk {
         self.draw_cache.vertices = tverts;
         self.draw_cache.indices = tinds;
 
+        self.low_draw_cache.vertices = lowtverts;
+        self.low_draw_cache.indices = lowtinds;
+
         self.dirty = false;
     }
-
-    pub fn create_bdc(&self, pos: (usize, usize, usize), registry: &BlockRegistry, shape_registry: &BlockShapeRegistry, cdc: &ChunkDrawContext) -> BlockDrawContext {
-        let mut out = [false; 6];
-
-        let mut adjacents = [BlockInstance{blockdef: 0, exparam: 0, light: 0}; 6];
-
-        for idx in 0..6 {
-            let v = rotation_group::rf_to_vector( rotation_group::num_to_rf(idx).unwrap() );
-            let opos = ( pos.0 as i32 + v.x as i32, pos.1 as i32 + v.y as i32, pos.2 as i32 + v.z as i32 );
-            let mut bi = BlockInstance{blockdef: 0, exparam: 0, light: 0};
-            if opos.0 < 0 {
-                match cdc.minus_x {
-                    Some(slice) => { bi = slice[ (opos.1 as usize, opos.2 as usize) ] },
-                    None => {}
-                };
-            } else if opos.0 > (CHUNK_SIZE - 1).try_into().unwrap() {
-                match cdc.plus_x {
-                    Some(slice) => { bi = slice[ (opos.1 as usize, opos.2 as usize) ]; },
-                    None => {}
-                };
-            } else if opos.1 < 0 {
-                match cdc.minus_y {
-                    Some(slice) => { bi = slice[ (opos.0 as usize, opos.2 as usize) ]; },
-                    None => {}
-                };
-            } else if opos.1 > (CHUNK_SIZE - 1).try_into().unwrap() {
-                match cdc.plus_y {
-                    Some(slice) => { bi = slice[ (opos.0 as usize, opos.2 as usize) ]; },
-                    None => {}
-                };
-            } else if opos.2 < 0 {
-                match cdc.minus_z {
-                    Some(slice) => { bi = slice[ (opos.0 as usize, opos.1 as usize) ]; },
-                    None => {}
-                };
-            } else if opos.2 > (CHUNK_SIZE - 1).try_into().unwrap() {
-                match cdc.plus_z {
-                    Some(slice) => { bi = slice[ (opos.0 as usize, opos.1 as usize) ]; },
-                    None => {}
-                };
-            } else {
-                bi = self.data[ (opos.0 as usize, opos.1 as usize, opos.2 as usize) ];
-            }
-
-            adjacents[idx as usize] = bi;
-
-            let bdef = registry.get(bi.blockdef).unwrap();
-            if !bdef.transparent {
-                let sdef = shape_registry.get(bdef.shape_id).unwrap();
-                out[ idx as usize ] = sdef.does_obstruct( bi.exparam, rotation_group::reverse_rf( rotation_group::num_to_rf( idx ).unwrap() ) );
-            }
-        }
-
-        let mut ao = [0.0; 8];
-
-        for idx in 0..8 {
-            let vec = rotation_group::rv_to_vector( rotation_group::num_to_rv(idx).unwrap() );
-            let mut value = 0.0;
-
-            if vec.x <= 0.0 {
-                let bi = adjacents[5 as usize];
-                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(1.0, vec.y, vec.z) ).unwrap();
-                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
-            } else {
-                let bi = adjacents[4 as usize];
-                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(-1.0, vec.y, vec.z) ).unwrap();
-                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
-            }
-
-            if vec.y <= 0.0 {
-                let bi = adjacents[3 as usize];
-                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(vec.x, 1.0, vec.z) ).unwrap();
-                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
-            } else {
-                let bi = adjacents[2 as usize];
-                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(vec.x, -1.0, vec.z) ).unwrap();
-                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
-            }
-
-            if vec.z <= 0.0 {
-                let bi = adjacents[1 as usize];
-                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(vec.x, vec.y, 1.0) ).unwrap();
-                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
-            } else {
-                let bi = adjacents[0 as usize];
-                let query_corner = rotation_group::vector_to_rv( cgmath::Vector3::new(vec.x, vec.y, -1.0) ).unwrap();
-                value += 0.1 * Self::help_ao_query(registry, shape_registry, bi, query_corner);
-            }
-
-            ao[idx as usize] = value;
-        }
-
-        BlockDrawContext {
-            obstructions: out,
-            aos: ao
-        }
-    }
-
-    fn help_ao_query(registry: &BlockRegistry, shape_registry: &BlockShapeRegistry, instance: BlockInstance, corner: rotation_group::RotVert) -> f32 {
-        if instance.blockdef == 0 {
-            return 0.0;
-        }
-        let bdef = registry.get(instance.blockdef).unwrap();
-        if bdef.transparent {
-            return 0.0;
-        }
-        let sdef = shape_registry.get(bdef.shape_id).unwrap();
-        sdef.get_ao(instance.exparam, corner)
-    }
-
-}
-
-
-fn is_in_bounds( pos: (usize, usize, usize) ) -> bool {
-    pos.0 < CHUNK_SIZE && pos.1 < CHUNK_SIZE && pos.2 < CHUNK_SIZE
 }
 
 #[derive(Clone)]
 pub struct ChunkDrawCache {
-    pub vertices: Vec<Vertex>,
-    pub indices: Vec<u16>
+    pub vertices: Vec<BlockVertex>,
+    pub indices: Vec<u32>
 }
 
 impl Default for ChunkDrawCache {
     fn default() -> ChunkDrawCache {
         Self {
-            vertices: Vec::<Vertex>::new(),
-            indices: Vec::<u16>::new()
+            vertices: Vec::<BlockVertex>::new(),
+            indices: Vec::<u32>::new()
         }
     }
 }
@@ -231,58 +153,21 @@ impl ChunkDrawCache {
     }
 }
 
-pub struct BlockDrawContext {
-    pub obstructions: [bool; 6],
-    pub aos: [f32; 8],
-}
-
-impl Default for BlockDrawContext {
-    fn default() -> BlockDrawContext {
-        Self {
-            obstructions: [false; 6],
-            aos: [0.0; 8]
-        }
-    }
-}
-
-pub struct ChunkDrawContext<'a> {
-    pub minus_z: Option<ArrayView2<'a, BlockInstance>>,
-    pub plus_z: Option<ArrayView2<'a, BlockInstance>>,
-    pub minus_y: Option<ArrayView2<'a, BlockInstance>>,
-    pub plus_y: Option<ArrayView2<'a, BlockInstance>>,
-    pub minus_x: Option<ArrayView2<'a, BlockInstance>>,
-    pub plus_x: Option<ArrayView2<'a, BlockInstance>>
-}
-
-impl<'a> ChunkDrawContext<'a> {
-    pub fn new() -> ChunkDrawContext<'a> {
-        Self{
-            minus_z: None,
-            plus_z: None,
-            minus_y: None,
-            plus_y: None,
-            minus_x: None,
-            plus_x: None
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ChunkManager {
-    pub size: usize,
-    pub data: Array3<Chunk>
+    pub data: Array3<Chunk>,
+    pub size: usize
 }
 
 impl ChunkManager {
     pub fn new(size: usize) -> ChunkManager {
         let constr = | loc: (usize, usize, usize) | -> Chunk {
             if loc.1 < 2 {
-                let proto_bi = BlockInstance{
-                    blockdef: 1,
-                    exparam: 0,
-                    light: 255,
+                let proto_bi = BlockDef{
+                    blockmesh: 1,
+                    exparam: 0
                 };
-                Chunk::from_blockinstance(proto_bi)
+                Chunk::from_blockdef(proto_bi)
             } else {
                 Chunk::new()
             }
@@ -295,99 +180,69 @@ impl ChunkManager {
         }
     }
 
-    pub fn get_block(&self, world_pos: (usize, usize, usize) ) -> & BlockInstance {
+    pub fn get_block(&self, world_pos: (usize, usize, usize) ) -> & BlockDef {
         let chunk_index = ( world_pos.0 / CHUNK_SIZE, world_pos.1 / CHUNK_SIZE, world_pos.2 / CHUNK_SIZE );
         let inner_index = ( world_pos.0 % CHUNK_SIZE, world_pos.1 % CHUNK_SIZE, world_pos.2 % CHUNK_SIZE );
         &self.data[chunk_index].data[inner_index]
     }
 
-    pub fn get_mut_block(&mut self, world_pos: (usize, usize, usize) ) -> &mut BlockInstance {
+    pub fn get_mut_block(&mut self, world_pos: (usize, usize, usize) ) -> &mut BlockDef {
         let chunk_index = ( world_pos.0 / CHUNK_SIZE, world_pos.1 / CHUNK_SIZE, world_pos.2 / CHUNK_SIZE );
         let inner_index = ( world_pos.0 % CHUNK_SIZE, world_pos.1 % CHUNK_SIZE, world_pos.2 % CHUNK_SIZE );
         self.data[chunk_index].dirty = true;
-        // set adjacent chunks as dirty if needed
-        if inner_index.0 == 0 && chunk_index.0 > 0 { self.data[ (chunk_index.0 - 1, chunk_index.1, chunk_index.2) ].dirty = true; }
-        if inner_index.0 == CHUNK_SIZE - 1 && chunk_index.0 < WORLD_CHUNKS[self.size] - 1 { self.data[ (chunk_index.0 + 1, chunk_index.1, chunk_index.2) ].dirty = true; }
-        if inner_index.1 == 0 && chunk_index.1 > 0 { self.data[ (chunk_index.0, chunk_index.1 - 1, chunk_index.2) ].dirty = true; }
-        if inner_index.1 == CHUNK_SIZE - 1 && chunk_index.1 < WORLD_CHUNKS[self.size] - 1 { self.data[ (chunk_index.0, chunk_index.1 + 1, chunk_index.2) ].dirty = true; }
-        if inner_index.2 == 0 && chunk_index.2 > 0 { self.data[ (chunk_index.0, chunk_index.1, chunk_index.2 - 1) ].dirty = true; }
-        if inner_index.2 == CHUNK_SIZE - 1 && chunk_index.2 < WORLD_CHUNKS[self.size] - 1 { self.data[ (chunk_index.0, chunk_index.1, chunk_index.2 + 1) ].dirty = true; }
-
 
         &mut self.data[chunk_index].data[inner_index]
     }
 
-    pub fn update_dirty_chunks(&mut self, registry: &BlockRegistry, shape_registry: &BlockShapeRegistry ) {
-        let rebuild = |this: &mut Self, ch_idx: (usize, usize, usize), wpos: (usize, usize, usize)| {
-            let mut dirty = false;
-            {
-                dirty = this.data.get( ch_idx ).expect("failed to get chunk").dirty;
+    pub fn update_dirty_chunks(&mut self, mesh_registry: &Registry<BlockMesh> ) {
+        let rebuild = |ch: ((usize, usize, usize), &mut Chunk)| {
+            if !ch.1.dirty {
+                return;
             }
-            if dirty {
-                let mut cdc = ChunkDrawContext::new();
-
-                if ch_idx.0 > 0 {
-                    let ptr = this.data.get_ptr( ( ch_idx.0 - 1 as usize, ch_idx.1 as usize, ch_idx.2 as usize ) ).expect("Failed to get chunk pointer!");
-                    unsafe {
-                        cdc.minus_x = Some( (*ptr).data.slice(s![ CHUNK_SIZE - 1, 0..CHUNK_SIZE, 0..CHUNK_SIZE ]) );
-                    }
-                }
-                if ch_idx.0 < WORLD_CHUNKS[this.size] - 1 as usize {
-                    let ptr = this.data.get_ptr( ( ch_idx.0 + 1 as usize, ch_idx.1 as usize, ch_idx.2 as usize ) ).expect("Failed to get chunk pointer!");
-                    unsafe {
-                        cdc.plus_x = Some( (*ptr).data.slice(s![ 0, 0..CHUNK_SIZE, 0..CHUNK_SIZE ]) );
-                    }
-                }
-
-                if ch_idx.1 > 0 {
-                    let ptr = this.data.get_ptr( ( ch_idx.0 as usize, ch_idx.1 - 1 as usize, ch_idx.2 as usize ) ).expect("Failed to get chunk pointer!");
-                    unsafe {
-                        cdc.minus_y = Some( (*ptr).data.slice(s![ 0..CHUNK_SIZE, CHUNK_SIZE - 1, 0..CHUNK_SIZE ]) );
-                    }
-                }
-                if ch_idx.1 < WORLD_CHUNKS[this.size] - 1 as usize {
-                    let ptr = this.data.get_ptr( ( ch_idx.0 as usize, ch_idx.1 + 1 as usize, ch_idx.2 as usize ) ).expect("Failed to get chunk pointer!");
-                    unsafe {
-                        cdc.plus_y = Some( (*ptr).data.slice(s![ 0..CHUNK_SIZE, 0, 0..CHUNK_SIZE ]) );
-                    }
-                }
-
-                if ch_idx.2 > 0 {
-                    let ptr = this.data.get_ptr( ( ch_idx.0 as usize, ch_idx.1 as usize, ch_idx.2 - 1 as usize ) ).expect("Failed to get chunk pointer!");
-                    unsafe {
-                        cdc.minus_z = Some( (*ptr).data.slice(s![ 0..CHUNK_SIZE, 0..CHUNK_SIZE, CHUNK_SIZE - 1 ]) );
-                    }
-                }
-                if ch_idx.2 < WORLD_CHUNKS[this.size] - 1 as usize {
-                    let ptr = this.data.get_ptr( ( ch_idx.0 as usize, ch_idx.1 as usize, ch_idx.2 + 1 as usize ) ).expect("Failed to get chunk pointer!");
-                    unsafe {
-                        cdc.plus_z = Some( (*ptr).data.slice(s![ 0..CHUNK_SIZE, 0..CHUNK_SIZE, 0 ]) );
-                    }
-                }
-
-                let ch = this.data.get_mut( ch_idx ).expect("failed to get chunk");
-                ch.update_draw_cache(wpos, registry, shape_registry, cdc);
-            }
+            ch.1.update_draw_cache( mesh_registry, ( ch.0.0 * CHUNK_SIZE, ch.0.1 * CHUNK_SIZE, ch.0.2 * CHUNK_SIZE ) );
         };
-        for x in 0..WORLD_CHUNKS[self.size] {
-            for y in 0..WORLD_CHUNKS[self.size] {
-                for z in 0..WORLD_CHUNKS[self.size] {
-                    rebuild(self, (x, y, z), (x * CHUNK_SIZE, y * CHUNK_SIZE, z * CHUNK_SIZE) );
-                }
-            }
-        }
+
+        self.data.indexed_iter_mut().for_each( rebuild );
     }
 
-    pub fn get_render_chunks(&self) -> Vec<ChunkDrawCache> {
+    pub fn get_render_chunks(&self, pos: Point3<f32>, viewvec: Vector3<f32> ) -> Vec<ChunkDrawCache> {
         let mut cache_vec = Vec::<ChunkDrawCache>::new();
 
-        for ch in self.data.iter() {
-            let cache = &ch.draw_cache;
-            if !cache.is_empty() {
-                cache_vec.push( cache.clone() );
+        let mut iiter = self.data.indexed_iter();
+
+        let local_idx = ( (pos.x / 16.0) as usize, (pos.y / 16.0) as usize, (pos.z / 16.0) as usize );
+
+        while let Some(tp) = iiter.next() {
+            let (cpos, ch) = tp;
+
+            let ds = max( local_idx.0.abs_diff(cpos.0), max( local_idx.1.abs_diff(cpos.1), local_idx.2.abs_diff(cpos.2) ) );
+
+            if ds < 2usize {
+                cache_vec.push( ch.draw_cache.clone() );
+            } else if ds < 3usize {
+                cache_vec.push( ch.low_draw_cache.clone() );
             }
         }
 
         cache_vec
     }
+
+    pub fn get_all_render_chunks(&self, low: bool) -> Vec<ChunkDrawCache> {
+        let mut iter = self.data.iter();
+        let mut cache_vec = Vec::<ChunkDrawCache>::new();
+
+        while let Some(ch) = iter.next() {
+
+            if ch.draw_cache.is_empty() { continue; }
+
+            if !low {
+                cache_vec.push( ch.draw_cache.clone() );
+            } else {
+                cache_vec.push( ch.low_draw_cache.clone() );
+            }
+        }
+
+        cache_vec
+    }
+
 }

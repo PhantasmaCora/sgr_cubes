@@ -4,6 +4,7 @@ use std::io::Error;
 use wgpu::util::DeviceExt;
 
 use cgmath::Angle;
+use cgmath::SquareMatrix;
 
 use figures::units::{
     Px,
@@ -25,6 +26,10 @@ use cushy::value::{
     Destination
 };
 
+
+use crate::wctx::blockmesh::BlockMesh;
+use crate::wctx::blockdef::BlockDef;
+use crate::wctx::registry::Registry;
 
 pub mod world_ui;
 
@@ -1384,7 +1389,7 @@ impl UICore {
 
     }
 
-    pub fn update_wield_item( &mut self, wi: WieldItem, device: &wgpu::Device, queue: &wgpu::Queue, br: &crate::wctx::block::BlockRegistry, sr: &crate::wctx::block::BlockShapeRegistry, block_render_setup: Option< (&wgpu::RenderPipeline, &wgpu::BindGroupLayout, &wgpu::BindGroup, &wgpu::BindGroup) > ) {
+    pub fn update_wield_item( &mut self, wi: WieldItem, device: &wgpu::Device, queue: &wgpu::Queue, mesh_registry: &Registry<BlockMesh>, block_render_setup: Option< (&wgpu::RenderPipeline, &wgpu::BindGroupLayout) > ) {
         match wi {
             WieldItem::Block(block_id) => {
                 let setup = block_render_setup.expect("Some(Block render pipeline) is REQUIRED for drawing block to wielditem texture, found None");
@@ -1394,17 +1399,13 @@ impl UICore {
                 let mut tinds = Vec::<u16>::new();
 
                 // get block data
-                let blockdef = br.get(block_id).expect("Failed to find block in registry");
-                let shapedef = sr.get(blockdef.shape_id).expect("Failed to find shape in registry");
-                shapedef.generate_draw_buffers(
-                    &mut tverts,
-                    &mut tinds,
-                    blockdef,
-                    0,
-                    crate::wctx::chunk::BlockDrawContext::default(),
-                    (0,0,0),
-                    (0,0,0)
-                );
+                let bmesh = mesh_registry.get(block_id).expect("Failed to find mesh in registry");
+
+                let bdef = BlockDef {
+                    blockmesh: block_id,
+                    exparam: 0
+                };
+                let (tverts, tinds) = bmesh.generate_verts(false, &bdef, (0,0,0), 0 );
 
                 let vertex_buffer = device.create_buffer_init(
                     &wgpu::util::BufferInitDescriptor {
@@ -1425,8 +1426,12 @@ impl UICore {
                 let view = &self.wield_tex.view;
                 let dt_view = &self.wield_dt.view;
 
-                let mut camera_uniform = crate::wctx::world::CameraUniform{ view_proj:
-                    ( cgmath::Matrix4::from_translation( cgmath::Vector3::new( 0.5, 0.3, 0.5 ) ) * cgmath::Matrix4::from_nonuniform_scale(0.5, 0.5, 0.1) * cgmath::Matrix4::from_angle_x( cgmath::Rad::atan( 2.0_f32.sqrt() / 2.0 ) ) * cgmath::Matrix4::from_angle_y( cgmath::Rad::full_turn() / -8.0 ) * cgmath::Matrix4::from_translation( cgmath::Vector3::new( -0.5, -0.5, -0.5 ) ) ).into()
+                let mat: [[f32; 4]; 4] = ( cgmath::Matrix4::from_translation( cgmath::Vector3::new( 0.5, 0.3, 0.5 ) ) * cgmath::Matrix4::from_nonuniform_scale(0.49, 0.49, -0.095) * cgmath::Matrix4::from_angle_x( cgmath::Rad::atan( 2.0_f32.sqrt() / 2.0 ) ) * cgmath::Matrix4::from_angle_y( cgmath::Rad::full_turn() / -8.0 ) * cgmath::Matrix4::from_translation( cgmath::Vector3::new( -0.5, -0.5, -0.5 ) ) ).into();
+
+                let mut camera_uniform = crate::wctx::world::CameraUniform{
+                    view: mat,
+                    view_proj: mat,
+                    inv_view_proj: cgmath::Matrix4::from( mat ).invert().unwrap().into(),
                 };
 
                 let camera_buffer = device.create_buffer_init(
@@ -1477,10 +1482,8 @@ impl UICore {
 
                     render_pass.set_pipeline(render_pipeline);
                     render_pass.set_bind_group(0, &camera_bind_group, &[]);
-                    render_pass.set_bind_group(1, setup.2, &[]);
-                    render_pass.set_bind_group(2, setup.3, &[]);
                     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..num_indices, 0, 0..1);
                 }
 
@@ -1500,7 +1503,7 @@ impl UICore {
 
 
 pub enum WieldItem {
-    Block(u16),
+    Block(u32),
     Sprite
 }
 

@@ -12,6 +12,20 @@ use figment::providers::{Format, Toml};
 
 use serde::Deserialize;
 
+use ply_rs::parser::Parser;
+use ply_rs::ply::*;
+use ply_rs::ply::Property::{
+    Float,
+    ListUInt
+};
+
+use crate::wctx::blockmesh::{
+    BlockMesh,
+    BlockTemplateVertex
+};
+use crate::wctx::registry::Registry;
+use crate::wctx::rotation_group::RotType;
+
 #[derive(Debug, PartialEq, Clone, Deserialize)]
 pub struct Config {
     block: Vec<BlockPlan>,
@@ -20,50 +34,35 @@ pub struct Config {
 #[derive(Debug, PartialEq, Clone, Deserialize)]
 pub struct BlockPlan {
     pretty_name: String,
-    textures: Vec<String>,
-    shape_name: String,
-    transparent: Option<bool>,
+    mesh: String,
+    lod_mesh: String,
+    rot_group: String,
+    solid: bool
 }
 
 pub struct BlockLoader {
-    pub block_registry: crate::wctx::block::BlockRegistry,
+    pub mesh_registry: Registry<BlockMesh>,
     block_names: HashMap<String, u32>,
     pub texture_atlas: crate::wctx::atlas_tex::AtlasTexture,
-    pub normal_tex_atlas: crate::wctx::atlas_tex::AtlasTexture,
-    texture_names: HashMap<String, u32>,
-    pub shape_registry: crate::wctx::block::BlockShapeRegistry,
-    shape_names: HashMap<String, u32>,
     figment: Figment,
     config: Option<Config>,
 }
 
 impl BlockLoader {
     pub fn create(device: &wgpu::Device, queue: &wgpu::Queue) -> BlockLoader {
-        let block_registry = crate::wctx::block::BlockRegistry::new();
+        let mesh_registry = Registry::<BlockMesh>::new();
         let block_names = HashMap::<String, u32>::new();
         let texture_atlas = crate::wctx::atlas_tex::AtlasTexture::new(&device, &queue, wgpu::TextureFormat::R8Uint, (32, 32));
-        let texture_names = HashMap::<String, u32>::new();
-        let shape_registry = crate::wctx::block::BlockShapeRegistry::new();
-        let shape_names = HashMap::<String, u32>::new();
         let figment = Figment::new();
         let config = None;
 
         Self {
-            block_registry,
+            mesh_registry,
             block_names,
             texture_atlas,
-            texture_names,
-            shape_registry,
-            shape_names,
             figment,
             config
         }
-    }
-
-    pub fn submit_blockshape_direct(&mut self, bs: crate::wctx::block::BlockShape, name: &String ) -> u32 {
-        let idx = self.shape_registry.add(bs);
-        self.shape_names.insert( name.clone(), idx );
-        idx
     }
 
     pub fn load_toml_from_file(&mut self, filename: PathBuf) -> Result<(), Error> {
@@ -80,29 +79,63 @@ impl BlockLoader {
         Ok(())
     }
 
-    pub fn resolve_blocks(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, pal_img: &image::DynamicImage) -> Result<(), Error> {
+    pub fn resolve_blocks(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) -> Result<(), Error> {
         if None == self.config {
             return Err( Error::new::<String>( std::io::ErrorKind::Other, "Cannot resolve blocks yet, config must be extracted first!!".into() ) );
         }
+
+        // make sure to create air
+        let nilmesh = BlockMesh::new(
+            Vec::<BlockTemplateVertex>::new(),
+            Vec::<u32>::new(),
+            "Air".to_string(),
+            false,
+            None,
+            RotType::Static,
+            false
+        );
+        self.mesh_registry.add(nilmesh);
+
         for bp in self.config.as_ref().unwrap().block.clone() {
-            let tex_indices: Vec<u32> = bp.textures.into_iter().map( | value | -> u32 {
-                self.check_add_texture( value, device, queue, pal_img )
-            } ).collect();
-            let shape_idx = self.shape_names.get( &bp.shape_name ).ok_or(Error::new::<String>(std::io::ErrorKind::Other, "Shape name not found!".into() ))?;
-            let pretty_name = bp.pretty_name.clone();
 
-            let transparent = match bp.transparent {
-                Some(value) => value,
-                None => false
-            };
+            let mut rot_group = RotType::Static;
 
-            self.block_registry.add( *shape_idx, pretty_name, tex_indices, transparent );
+            if bp.rot_group == "RotFace" { rot_group = RotType::RotFace; }
+            if bp.rot_group == "RotEdge" { rot_group = RotType::RotVert; }
+            if bp.rot_group == "RotVert" { rot_group = RotType::RotEdge; }
+
+            let mut lod_mesh = None;
+            let mut has_lod = false;
+
+            if !bp.lod_mesh.is_empty() {
+                lod_mesh = Some( Self::load_ply( format!("res/meshes/{}", &bp.lod_mesh) ) );
+                has_lod = true;
+            }
+
+            let (verts, indices) = Self::load_ply( format!("res/meshes/{}", &bp.mesh) );
+
+            let solid = bp.solid;
+
+            // println!("added a bmesh with {} verts", verts.len() );
+
+            let bmesh = BlockMesh::new(
+                verts,
+                indices,
+                bp.pretty_name,
+                has_lod,
+                lod_mesh,
+                rot_group,
+                solid
+            );
+
+            let ridx = self.mesh_registry.add(bmesh);
+            //println!("at {}", ridx);
         }
 
         Ok(())
     }
 
-    fn check_add_texture(&mut self, tex_name: String, device: &wgpu::Device, queue: &wgpu::Queue, pal_img: &image::DynamicImage) -> u32 {
+    /*fn check_add_texture(&mut self, tex_name: String, device: &wgpu::Device, queue: &wgpu::Queue, pal_img: &image::DynamicImage) -> u32 {
         let check = self.texture_names.get(&tex_name);
         if let Some(idx) = check {
             return *idx;
@@ -117,5 +150,50 @@ impl BlockLoader {
             let tex_idx = self.texture_atlas.add_texture(&texture, &device, &queue).expect("Failed to add texture to atlas");
             return tex_idx;
         }
+    }*/
+
+    fn load_ply(path: String) -> ( Vec<BlockTemplateVertex>, Vec<u32> ) {
+
+        let mut f = std::fs::File::open(path).unwrap();
+
+        // create a parser
+        let p = Parser::<DefaultElement>::new();
+
+        // use the parser: read the entire file
+        let ply = p.read_ply(&mut f);
+
+        // Did it work?
+        assert!(ply.is_ok());
+
+        let plyu = ply.unwrap();
+
+        let mut verts = Vec::<BlockTemplateVertex>::new();
+
+        for vi in 0..plyu.payload["vertex"].len() {
+            let v = &plyu.payload["vertex"][vi];
+            if let (Float(x), Float(y), Float(z), Float(nx), Float(ny), Float(nz), Float(ao), Float(subcolor)) = (v["x"].clone(), v["y"].clone(), v["z"].clone(), v["nx"].clone(), v["ny"].clone(), v["nz"].clone(), v["ao"].clone(), v["subcolor"].clone()) {
+                verts.push( BlockTemplateVertex::new(
+                        [ x, y, z ],
+                        [ nx, ny, nz ],
+                        ao,
+                        subcolor as u8
+                    )
+                );
+
+            }
+
+
+        }
+
+
+        let mut indices = Vec::<u32>::new();
+        for idxs in 0..plyu.payload["face"].len() {
+            if let ListUInt(ls) = & plyu.payload["face"][idxs]["vertex_indices"] {
+                indices.append(&mut ls.clone());
+            }
+        }
+
+        (verts, indices)
     }
+
 }
