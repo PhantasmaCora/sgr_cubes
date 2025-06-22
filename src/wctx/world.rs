@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 use std::io::Error;
+use std::collections::HashMap;
 
 use cgmath::SquareMatrix;
 
@@ -26,6 +27,7 @@ use crate::wctx::blockmesh::{
     BlockVertex,
     BlockMesh
 };
+use crate::wctx::rotation_group::*;
 
 use crate::wctx::registry::Registry;
 use crate::wctx::atlas_tex;
@@ -36,7 +38,7 @@ pub struct WorldSavestate {
     pub chunk_manager: chunk::ChunkManager,
     pub block_select: u32,
     pub camera: camera::Camera,
-    pub static_lights: Vec<light::StaticLight>,
+    pub static_lights: HashMap<(i32, i32, i32), light::StaticLight>
 }
 
 impl WorldSavestate {
@@ -44,7 +46,7 @@ impl WorldSavestate {
         let chunk_manager = crate::wctx::chunk::ChunkManager::new(size);
         let block_select = 1;
         let camera = camera::Camera::new((0.0, 35.0, 0.0), cgmath::Deg(90.0), cgmath::Deg(-20.0));
-        let static_lights = Vec::<light::StaticLight>::new();
+        let static_lights = HashMap::<(i32, i32, i32), light::StaticLight>::new();
 
         Self {
             chunk_manager,
@@ -221,11 +223,12 @@ impl WorldRender {
         let light_buffer_data = vec![ camera_light.get_data() ];
         let light_count = light_buffer_data.len() as u32;
 
-        let light_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
+        let light_buffer = device.create_buffer(
+            &wgpu::BufferDescriptor {
                 label: Some("Light Buffer"),
-                contents: [bytemuck::cast_slice( &[ [light_count, 0, 0, 0] ] ), slice_vec(&light_buffer_data).as_slice()].concat().as_slice(),
+                size: 16 + 512 * std::mem::size_of::<light::PointLight>() as u64,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false
             }
         );
 
@@ -736,13 +739,6 @@ impl WorldRender {
         );
 
         self.camera_light.update(&self.world.camera);
-        self.light_buffer_data[0] = self.camera_light.get_data();
-        queue.write_buffer(
-            &self.light_buffer,
-            16,
-            slice_vec(&self.light_buffer_data).as_slice(),
-        );
-
 
         // do block breaking and placing
         let mut last = grid_ray::ilattice::glam::IVec3::NEG_ONE;
@@ -777,18 +773,79 @@ impl WorldRender {
 
         if hit && mouse_pressed.left_just_now {
             let mut broken = self.world.chunk_manager.get_mut_block( ( current.x as usize, current.y as usize, current.z as usize ) );
+
+            // clear light if applicable
+            if let Some(_) = self.mesh_registry.get( broken.blockmesh ).unwrap().light {
+                let _res = self.world.static_lights.remove( &(current.x, current.y, current.z) );
+            }
+
+            // clear block def
             broken.blockmesh = 0;
             broken.exparam = 0;
         } else if hit && mouse_pressed.right_just_now && (last.x >= 0 && last.y >= 0 && last.z >= 0 &&
             last.x < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS[self.world.size()]) as i32 && last.y < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS[self.world.size()]) as i32 && last.z < (chunk::CHUNK_SIZE * chunk::WORLD_CHUNKS[self.world.size()]) as i32) {
             let mut placed = self.world.chunk_manager.get_mut_block( ( last.x as usize, last.y as usize, last.z as usize ) );
             placed.blockmesh = self.world.block_select;
-            placed.exparam = 0;
+
+            let rtype = self.mesh_registry.get(self.world.block_select).unwrap().rot_group;
+
+            // prelim for light
+            let mut loffset = None;
+            if let Some(light) = &self.mesh_registry.get( placed.blockmesh ).unwrap().light {
+                loffset = Some( cgmath::Vector3::new( light.offset[0], light.offset[1], light.offset[2] ) );
+            }
+
+            // handle rotation
+            match rtype {
+                RotType::RotFace => {
+                    let gvec = last - current;
+                    let rot = vector_to_rf( cgmath::Vector3::new( gvec.x as f32, gvec.y as f32, gvec.z as f32 ) ).unwrap();
+                    placed.set_rotation( rf_to_num( rot ) );
+                    if let Some(vec) = loffset {
+                        loffset = Some( generate_quat_from_rf(rot) * vec );
+                    }
+                }
+                _ => {
+
+                }
+            }
+
+            // handle light
+            if let (Some(light), Some(loff)) = (&self.mesh_registry.get( placed.blockmesh ).unwrap().light, loffset) {
+
+                self.world.static_lights.insert( (last.x, last.y, last.z), light::StaticLight::new(
+                    light.radius,
+                    [ last.x as f32 + loff.x + 0.5, last.y as f32 + loff.y + 0.5, last.z as f32 + loff.z + 0.5 ],
+                    light.color
+                ) );
+            }
+
         }
 
         {
             self.world.chunk_manager.update_dirty_chunks( &self.mesh_registry );
         }
+
+        let mut lbd = Vec::<light::PointLight>::new();
+        lbd.push( self.camera_light.get_data() );
+
+        let mut itr = self.world.static_lights.values();
+        while let Some(s_light) = itr.next() {
+            lbd.push( s_light.get_data() );
+        }
+
+        queue.write_buffer(
+            &self.light_buffer,
+            0,
+            bytemuck::cast_slice( &[lbd.len()] )
+        );
+
+        queue.write_buffer(
+            &self.light_buffer,
+            16,
+            slice_vec(&lbd).as_slice()
+        );
+
 
         self.select_duration += dt;
         if self.select_duration > std::time::Duration::new(0, 250_000_000) {
@@ -888,7 +945,7 @@ impl WorldRender {
                         view: out_view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
+                            load: wgpu::LoadOp::Clear( wgpu::Color::BLACK ),
                             store: wgpu::StoreOp::Store,
                         },
                     })

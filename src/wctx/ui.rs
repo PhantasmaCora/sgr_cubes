@@ -1405,7 +1405,7 @@ impl UICore {
                     blockmesh: block_id,
                     exparam: 0
                 };
-                let (tverts, tinds) = bmesh.generate_verts(false, &bdef, (0,0,0), 0 );
+                let (tverts, tinds) = bmesh.generate_ui_verts( &bdef, (0,0,0), 0 );
 
                 let vertex_buffer = device.create_buffer_init(
                     &wgpu::util::BufferInitDescriptor {

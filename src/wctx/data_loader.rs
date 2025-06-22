@@ -21,7 +21,8 @@ use ply_rs::ply::Property::{
 
 use crate::wctx::blockmesh::{
     BlockMesh,
-    BlockTemplateVertex
+    BlockTemplateVertex,
+    BlockStaticLight
 };
 use crate::wctx::registry::Registry;
 use crate::wctx::rotation_group::RotType;
@@ -35,9 +36,18 @@ pub struct Config {
 pub struct BlockPlan {
     pretty_name: String,
     mesh: String,
-    lod_mesh: String,
+    lod_mesh: Option<String>,
+    ui_mesh: Option<String>,
     rot_group: String,
-    solid: bool
+    solid: bool,
+    light: Option<BPLight>,
+}
+
+#[derive(Debug, PartialEq, Clone, Deserialize)]
+pub struct BPLight {
+    radius: f32,
+    color: [f32; 3],
+    offset: [f32; 3]
 }
 
 pub struct BlockLoader {
@@ -92,7 +102,9 @@ impl BlockLoader {
             false,
             None,
             RotType::Static,
-            false
+            false,
+            None,
+            None
         );
         self.mesh_registry.add(nilmesh);
 
@@ -107,14 +119,30 @@ impl BlockLoader {
             let mut lod_mesh = None;
             let mut has_lod = false;
 
-            if !bp.lod_mesh.is_empty() {
-                lod_mesh = Some( Self::load_ply( format!("res/meshes/{}", &bp.lod_mesh) ) );
+            if let Some(value) = bp.lod_mesh {
+                lod_mesh = Some( Self::load_ply( format!("res/meshes/{}", &value) ) );
                 has_lod = true;
             }
 
             let (verts, indices) = Self::load_ply( format!("res/meshes/{}", &bp.mesh) );
 
             let solid = bp.solid;
+            let mut light = None;
+
+            if let Some(bpl) = bp.light {
+                light = Some( BlockStaticLight{
+                        radius: bpl.radius,
+                        color: bpl.color,
+                        offset: bpl.offset,
+                    }
+                );
+            }
+
+            let mut ui_mesh = None;
+
+            if let Some(value) = bp.ui_mesh {
+                ui_mesh = Some( Self::load_ply( format!("res/meshes/{}", &value) ) );
+            }
 
             // println!("added a bmesh with {} verts", verts.len() );
 
@@ -125,7 +153,9 @@ impl BlockLoader {
                 has_lod,
                 lod_mesh,
                 rot_group,
-                solid
+                solid,
+                light,
+                ui_mesh,
             );
 
             let ridx = self.mesh_registry.add(bmesh);

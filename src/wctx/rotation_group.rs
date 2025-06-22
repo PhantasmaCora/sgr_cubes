@@ -6,6 +6,7 @@ use cgmath::One;
 use cgmath::InnerSpace;
 use cgmath::AbsDiffEq;
 
+#[derive(Copy, Clone, Debug)]
 pub enum RotType {
     Static,
     RotFace,
@@ -92,7 +93,7 @@ pub fn generate_quat_from_rf( rf: RotFace ) -> Quaternion<f32> {
     let zero = rf_to_vector(RotFace::PlusZ).normalize();
     let input = rf_to_vector(rf).normalize();
 
-    Quaternion::<f32>::from_arc( zero, input, Some(zero) ).normalize()
+    Quaternion::<f32>::from_arc( zero, input, None ).normalize()
 }
 
 #[derive(Copy, Clone, Debug)]

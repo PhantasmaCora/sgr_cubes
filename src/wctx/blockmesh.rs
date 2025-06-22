@@ -12,6 +12,8 @@ use cgmath::{
     One
 };
 
+use serde::Deserialize;
+
 use crate::wctx::rotation_group;
 use crate::wctx::blockdef::BlockDef;
 use crate::wctx::registry::Registerable;
@@ -25,11 +27,13 @@ pub struct BlockMesh {
     pub has_lod: bool,
     lod: Option<(Vec<BlockTemplateVertex>, Vec<u32>)>,
     pub rot_group: rotation_group::RotType,
-    pub solid: bool
+    pub solid: bool,
+    pub light: Option<BlockStaticLight>,
+    ui: Option<(Vec<BlockTemplateVertex>, Vec<u32>)>
 }
 
 impl BlockMesh {
-    pub fn new(verts: Vec<BlockTemplateVertex>, indices: Vec<u32>, pretty_name: String, has_lod: bool, lod: Option<(Vec<BlockTemplateVertex>, Vec<u32>)>, rot_group: rotation_group::RotType, solid: bool) -> BlockMesh {
+    pub fn new(verts: Vec<BlockTemplateVertex>, indices: Vec<u32>, pretty_name: String, has_lod: bool, lod: Option<(Vec<BlockTemplateVertex>, Vec<u32>)>, rot_group: rotation_group::RotType, solid: bool, light: Option<BlockStaticLight>, ui: Option<(Vec<BlockTemplateVertex>, Vec<u32>)>) -> BlockMesh {
 
         Self {
             registry_id: 0,
@@ -39,7 +43,9 @@ impl BlockMesh {
             has_lod,
             lod,
             rot_group,
-            solid
+            solid,
+            light,
+            ui,
         }
     }
 
@@ -63,7 +69,7 @@ impl BlockMesh {
         let mut out_verts: Vec<BlockVertex> = Vec::new();
         let mut out_idxs: Vec<u32> = Vec::new();
 
-        for v in ( if lod && self.has_lod { &self.lod.as_ref().unwrap().0 } else { &self.verts }) {
+        for v in ( if lod && self.has_lod { &self.lod.as_ref().unwrap().0 } else { &self.verts } ) {
 
             let mut tmp_pos = Vector3::new( v.position[0], v.position[1], v.position[2] );
 
@@ -84,6 +90,53 @@ impl BlockMesh {
         }
 
         for i in (if lod && self.has_lod { &self.lod.as_ref().unwrap().1 } else { &self.indices} ) {
+            out_idxs.push(i + vbuf_offset);
+        }
+
+        return (out_verts, out_idxs);
+    }
+
+    pub fn generate_ui_verts(&self, bdef: &BlockDef, spatial_pos: (u32, u32, u32), vbuf_offset: u32) -> (Vec<BlockVertex>, Vec<u32>) {
+
+        let mut quat = Quaternion::<f32>::one();
+        match self.rot_group {
+            rotation_group::RotType::RotFace => {
+                quat = rotation_group::generate_quat_from_rf( rotation_group::num_to_rf( bdef.get_rotation() ).unwrap() );
+            },
+            rotation_group::RotType::RotVert => {
+                quat = rotation_group::generate_quat_from_rv( rotation_group::num_to_rv( bdef.get_rotation() ).unwrap() );
+            },
+            rotation_group::RotType::RotEdge => {
+                quat = rotation_group::generate_quat_from_re( rotation_group::num_to_re( bdef.get_rotation() ).unwrap() );
+            },
+            rotation_group::RotType::Static => {},
+            _ => {}
+        }
+
+        let mut out_verts: Vec<BlockVertex> = Vec::new();
+        let mut out_idxs: Vec<u32> = Vec::new();
+
+        for v in ( if self.ui.is_some() { &self.ui.as_ref().unwrap().0 } else { &self.verts } ) {
+
+            let mut tmp_pos = Vector3::new( v.position[0], v.position[1], v.position[2] );
+
+            tmp_pos = quat * tmp_pos;
+            tmp_pos += Vector3::new( spatial_pos.0 as f32 + 0.5, spatial_pos.1 as f32 + 0.5, spatial_pos.2 as f32 + 0.5 );
+
+            let mut tmp_norm = Vector3::new( v.normal[0], v.normal[1], v.normal[2] );
+            tmp_norm = quat * tmp_norm;
+
+            out_verts.push( BlockVertex{
+                position: [tmp_pos.x, tmp_pos.y, tmp_pos.z],
+                color: [1.0, 1.0, 1.0],
+                normal: [tmp_norm.x, tmp_norm.y, tmp_norm.z],
+                ao: 1.0,
+                metalrough: 512,
+                tex_index: 0
+            } );
+        }
+
+        for i in (if self.ui.is_some() { &self.ui.as_ref().unwrap().1 } else { &self.indices } ) {
             out_idxs.push(i + vbuf_offset);
         }
 
@@ -115,6 +168,14 @@ impl BlockTemplateVertex {
         }
     }
 }
+
+pub struct BlockStaticLight {
+    pub radius: f32,
+    pub color: [f32; 3],
+    pub offset: [f32; 3]
+}
+
+
 
 
 

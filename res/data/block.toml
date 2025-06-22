@@ -12,3 +12,32 @@ mesh = "plate_bolts.ply"
 rot_group = "Static"
 lod_mesh = "cube.ply"
 solid = true
+
+[[block]]
+pretty_name = "SP-120"
+mesh = "plate_heavy.ply"
+rot_group = "Static"
+lod_mesh = "cube.ply"
+solid = true
+
+[[block]]
+pretty_name = "Xa330"
+mesh = "extender01.ply"
+rot_group = "RotFace"
+lod_mesh = "cube.ply"
+solid = false
+
+[[block]]
+pretty_name = "Panel 71_h"
+mesh = "hollow_plate.ply"
+rot_group = "RotFace"
+lod_mesh = "panel_lod.ply"
+solid = false
+
+[[block]]
+pretty_name = "Lamp s01"
+mesh = "empty.ply"
+rot_group = "Static"
+ui_mesh = "light_star.ply"
+solid = false
+light = { radius = 10, color = [ 1.0, 0.8, 0.6 ], offset = [ 0.0, 0.0, 0.0 ] }
