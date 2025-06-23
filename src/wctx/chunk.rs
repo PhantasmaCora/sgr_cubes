@@ -210,12 +210,20 @@ impl ChunkManager {
 
         let mut iiter = self.data.indexed_iter();
 
-        let local_idx = ( (pos.x / 16.0) as usize, (pos.y / 16.0) as usize, (pos.z / 16.0) as usize );
+        let local_idx = ( (pos.x / CHUNK_SIZE as f32) as usize, (pos.y / CHUNK_SIZE as f32) as usize, (pos.z / CHUNK_SIZE as f32) as usize );
+
+        let shift_pos = pos - 10.0 * viewvec.normalize();
 
         while let Some(tp) = iiter.next() {
             let (cpos, ch) = tp;
 
             let ds = max( local_idx.0.abs_diff(cpos.0), max( local_idx.1.abs_diff(cpos.1), local_idx.2.abs_diff(cpos.2) ) );
+
+            let p = Point3::<f32>::new( (cpos.0 * CHUNK_SIZE + CHUNK_SIZE / 2) as f32, (cpos.1 * CHUNK_SIZE + CHUNK_SIZE / 2) as f32, (cpos.2 * CHUNK_SIZE + CHUNK_SIZE / 2) as f32 );
+            let v = p - shift_pos;
+            if v.dot(viewvec) < 0.0 {
+                continue;
+            }
 
             if ds < 3usize {
                 cache_vec.push( ch.draw_cache.clone() );

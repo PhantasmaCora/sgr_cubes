@@ -48,3 +48,10 @@ mesh = "45deg_tri.ply"
 rot_group = "RotEdge"
 lod_mesh = "45deg_lod.ply"
 solid = false
+
+[[block]]
+pretty_name = "MDX1"
+mesh = "modulex.ply"
+rot_group = "Static"
+lod_mesh = "cube.ply"
+solid = false
