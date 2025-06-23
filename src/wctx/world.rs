@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use std::io::Error;
 use std::collections::HashMap;
 
+use num::abs;
+
 use cgmath::SquareMatrix;
 
 use grid_ray::GridRayIter3;
@@ -804,6 +806,38 @@ impl WorldRender {
                     if let Some(vec) = loffset {
                         loffset = Some( generate_quat_from_rf(rot) * vec );
                     }
+                }
+                RotType::RotEdge => {
+                    let gvec = current - last;
+                    let mut svec = cgmath::Vector3::<f32>::new( gvec.x as f32, gvec.y as f32, gvec.z as f32 );
+                    if gvec.x != 0 {
+                        if abs(dir.y) > abs(dir.z) {
+                            svec.y += dir.y.signum();
+                        } else {
+                            svec.z += dir.z.signum();
+                        }
+                    } else if gvec.y != 0 {
+                        if abs(dir.x) > abs(dir.z) {
+                            svec.x += dir.x.signum();
+                        } else {
+                            svec.z += dir.z.signum();
+                        }
+                    } else {
+                        if abs(dir.y) > abs(dir.x) {
+                            svec.y += dir.y.signum();
+                        } else {
+                            svec.x += dir.x.signum();
+                        }
+                    }
+                    let rot = vector_to_re( svec ).unwrap();
+
+                    //println!("{:?}", rot);
+
+                    placed.set_rotation( re_to_num( rot ) );
+                    if let Some(vec) = loffset {
+                        loffset = Some( generate_quat_from_re(rot) * vec );
+                    }
+
                 }
                 _ => {
 

@@ -41,3 +41,10 @@ rot_group = "Static"
 ui_mesh = "light_star.ply"
 solid = false
 light = { radius = 10, color = [ 1.0, 0.8, 0.6 ], offset = [ 0.0, 0.0, 0.0 ] }
+
+[[block]]
+pretty_name = "45d-f101"
+mesh = "45deg_tri.ply"
+rot_group = "RotEdge"
+lod_mesh = "45deg_lod.ply"
+solid = false

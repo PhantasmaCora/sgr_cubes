@@ -2,6 +2,8 @@
 
 use cgmath::Vector3;
 use cgmath::Quaternion;
+use cgmath::Euler;
+use cgmath::Deg;
 use cgmath::One;
 use cgmath::InnerSpace;
 use cgmath::AbsDiffEq;
@@ -136,7 +138,7 @@ pub fn num_to_rv(num: u8) -> Option<RotVert> {
     }
 }
 
-pub fn rv_to_num(rv: RotVert) -> usize {
+pub fn rv_to_num(rv: RotVert) -> u8 {
     match rv {
         RotVert::XmYmZm => 0,
         RotVert::XmYmZp => 1,
@@ -259,6 +261,23 @@ pub fn num_to_re(num: u8) -> Option<RotEdge> {
     }
 }
 
+pub fn re_to_num(re: RotEdge) -> u8 {
+    match re {
+        RotEdge::LowZm => 0,
+        RotEdge::LowZp => 1,
+        RotEdge::LowXm => 2,
+        RotEdge::LowXp => 3,
+        RotEdge::MidZmXm => 4,
+        RotEdge::MidZpXp => 5,
+        RotEdge::MidZpXm => 6,
+        RotEdge::MidZmXp => 7,
+        RotEdge::TopZm => 8,
+        RotEdge::TopZp => 9,
+        RotEdge::TopXm => 10,
+        RotEdge::TopXp => 11
+    }
+}
+
 
 pub fn re_to_vector( re: RotEdge ) -> Vector3<f32> {
     match re {
@@ -281,7 +300,7 @@ pub fn vector_to_re( vect: Vector3<f32> ) -> Option<RotEdge> {
     let mut n_high: u8 = 0;
     if vect.y == 0.0 {
         n_high = 1;
-    } else if vect.y < 0.0 {
+    } else if vect.y > 0.0 {
         n_high = 2;
     }
 
@@ -311,16 +330,16 @@ pub fn vector_to_re( vect: Vector3<f32> ) -> Option<RotEdge> {
     match ( n_high, n_low ) {
         (0, 1) => Some(RotEdge::LowZp),
         (0, 0) => Some(RotEdge::LowZm),
-        (0, 3) => Some(RotEdge::LowXp),
-        (0, 2) => Some(RotEdge::LowXm),
+        (0, 2) => Some(RotEdge::LowXp),
+        (0, 3) => Some(RotEdge::LowXm),
         (1, 1) => Some(RotEdge::MidZpXp),
         (1, 0) => Some(RotEdge::MidZmXm),
         (1, 3) => Some(RotEdge::MidZmXp),
         (1, 2) => Some(RotEdge::MidZpXm),
         (2, 1) => Some(RotEdge::TopZp),
         (2, 0) => Some(RotEdge::TopZm),
-        (2, 3) => Some(RotEdge::TopXp),
-        (2, 2) => Some(RotEdge::TopXm),
+        (2, 2) => Some(RotEdge::TopXp),
+        (2, 3) => Some(RotEdge::TopXm),
         _ => None
     }
 }
@@ -332,18 +351,18 @@ pub fn rotate_re( re: RotEdge, quat: &Quaternion<f32> ) -> Option<RotEdge> {
 
 pub fn generate_quat_from_re( re: RotEdge ) -> Quaternion<f32> {
     let q = match re {
-        RotEdge::TopZm => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(0.0, 1.0, 0.0), None ),
-        RotEdge::TopZp => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(0.0, 1.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(0.0, 0.0, 1.0), None ),
-        RotEdge::TopXm => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(0.0, 1.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(-1.0, 0.0, 0.0), None ),
-        RotEdge::TopXp => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(0.0, 1.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(1.0, 0.0, 0.0), None ),
-        RotEdge::MidZmXm => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(-1.0, 0.0, 0.0), None ),
-        RotEdge::MidZpXp => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(-1.0, 0.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(0.0, 0.0, 1.0), None ),
-        RotEdge::MidZpXm => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(1.0, 0.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, 1.0), Vector3::<f32>::new(0.0, 1.0, 0.0), None ),
-        RotEdge::MidZmXp => Quaternion::from_arc( Vector3::<f32>::new(0.0, -1.0, 0.0), Vector3::<f32>::new(-1.0, 0.0, 0.0), None ) * Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, 1.0), Vector3::<f32>::new(0.0, -1.0, 0.0), None ),
+        RotEdge::TopZm => Quaternion::from( Euler::new( Deg(90.0), Deg(0.0), Deg(0.0)) ),
+        RotEdge::TopZp => Quaternion::from( Euler::new( Deg(180.0), Deg(0.0), Deg(0.0)) ),
+        RotEdge::TopXm => Quaternion::from( Euler::new( Deg(0.0), Deg(90.0), Deg(0.0)) ) * Quaternion::from( Euler::new( Deg(0.0), Deg(0.0), Deg(180.0)) ),
+        RotEdge::TopXp => Quaternion::from( Euler::new( Deg(0.0), Deg(-90.0), Deg(0.0)) ) * Quaternion::from( Euler::new( Deg(0.0), Deg(0.0), Deg(180.0)) ),
+        RotEdge::MidZmXm => Quaternion::from( Euler::new( Deg(0.0), Deg(0.0), Deg(-90.0)) ),
+        RotEdge::MidZpXp => Quaternion::from( Euler::new( Deg(0.0), Deg(-90.0), Deg(0.0)) ) * Quaternion::from( Euler::new( Deg(0.0), Deg(0.0), Deg(90.0)) ),
+        RotEdge::MidZpXm => Quaternion::from( Euler::new( Deg(0.0), Deg(90.0), Deg(0.0)) ) * Quaternion::from( Euler::new( Deg(0.0), Deg(0.0), Deg(-90.0)) ),
+        RotEdge::MidZmXp => Quaternion::from( Euler::new( Deg(0.0), Deg(0.0), Deg(90.0)) ),
         RotEdge::LowZm => Quaternion::one(),
-        RotEdge::LowZp => Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(0.0, 0.0, 1.0), None ),
-        RotEdge::LowXm => Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(-1.0, 0.0, 0.0), None ),
-        RotEdge::LowXp => Quaternion::from_arc( Vector3::<f32>::new(0.0, 0.0, -1.0), Vector3::<f32>::new(1.0, 0.0, 0.0), None )
+        RotEdge::LowZp => Quaternion::from( Euler::new( Deg(-90.0), Deg(0.0), Deg(0.0) ) ),
+        RotEdge::LowXm => Quaternion::from( Euler::new( Deg(0.0), Deg(90.0), Deg(0.0)) ),
+        RotEdge::LowXp => Quaternion::from( Euler::new( Deg(0.0), Deg(-90.0), Deg(0.0)) ),
     };
     q.normalize()
 }

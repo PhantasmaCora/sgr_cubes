@@ -217,9 +217,9 @@ impl ChunkManager {
 
             let ds = max( local_idx.0.abs_diff(cpos.0), max( local_idx.1.abs_diff(cpos.1), local_idx.2.abs_diff(cpos.2) ) );
 
-            if ds < 2usize {
+            if ds < 3usize {
                 cache_vec.push( ch.draw_cache.clone() );
-            } else if ds < 3usize {
+            } else if ds < 4usize {
                 cache_vec.push( ch.low_draw_cache.clone() );
             }
         }

@@ -113,8 +113,8 @@ impl BlockLoader {
             let mut rot_group = RotType::Static;
 
             if bp.rot_group == "RotFace" { rot_group = RotType::RotFace; }
-            if bp.rot_group == "RotEdge" { rot_group = RotType::RotVert; }
-            if bp.rot_group == "RotVert" { rot_group = RotType::RotEdge; }
+            if bp.rot_group == "RotEdge" { rot_group = RotType::RotEdge; }
+            if bp.rot_group == "RotVert" { rot_group = RotType::RotVert; }
 
             let mut lod_mesh = None;
             let mut has_lod = false;
